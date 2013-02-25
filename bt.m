@@ -124,6 +124,7 @@ const
   PHASETWO:       1;  -- SSP Phase 2 Protocol (1: JW | 2: NC | 3: PE | 4: OOB)
 
   NumInitiators:  1;  -- number of initiators
+  MaxInitiators:  7;  -- maximum number of initiators per responder
   NumResponders:  1;  -- number of responders
   NumIntruders:   1;  -- number of intruders
   NetworkSize:    1;  -- max. number of outstanding messages in network
@@ -212,6 +213,10 @@ type
   };
   
   Responder: record
+    pairings: multiset[MaxInitiators] of Pairing;
+  end;
+  
+  Pairing: record
     state: ResponderStates;
     initiator: AgentId;
   end;
@@ -259,7 +264,7 @@ ruleset i: InitiatorId do
       multisetadd (outM, net);
       
       ini[i].state      := I_SENT_KEY;
-      init[i].responder := j;
+      ini[i].responder := j;
     end;
   end;
 end;
