@@ -189,6 +189,9 @@ type
   Initiator: record
     state: InitiatorStates;
     responder: AgentId;
+    responder_pkb: AgentId;
+    responder_nb: AgentId;
+    responder_cb: CValue;
   end;
   
   ResponderStates: enum {
@@ -290,9 +293,8 @@ ruleset i: InitiatorId do
 
       if inM.mType = M_Nonce then -- correct message type
         if inM.source = ini[i].responder then
-          
-
-
+          ini[i].responder_nb := inM.nonce;
+          ini[i].state := I_VERIFIED;
         end;
       end;
 
