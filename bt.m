@@ -189,10 +189,7 @@ type
     
     -- Phase 3
     I_WAIT_EVALUE,
-    I_PHASETHREE_DONE,
-
-    -- Phase 4/5
-    I_COMMITTED
+    I_PHASETHREE_DONE
   };
   
   Initiator: record
@@ -214,10 +211,7 @@ type
     R_PHASETWO_DONE,  -- complete phase 2 exchange and verified
     
     -- Phase 3
-    R_PHASETHREE_DONE,
-
-    -- Phase 4/5
-    R_COMMITTED
+    R_PHASETHREE_DONE
   };
   
   Pairing: record
@@ -407,7 +401,7 @@ ruleset i: InitiatorId do
     outEValue.pkb     := ini[i].responder_pkb;
     outEValue.na      := i;
     outEValue.nb      := ini[i].responder_nb;
-    outEValue.r       := ini[i].responder_rb;
+    outEValue.r       := ini[i].responder_rb;   -- Ea has r = rb
     outEValue.source  := i;
     outEValue.dest    := ini[i].responder;
 
@@ -421,6 +415,42 @@ ruleset i: InitiatorId do
     multisetadd (outM, net);
     
     ini[i].state      := I_WAIT_EVALUE;
+  end;
+end;
+
+-- initiator i checks the exchange verification value (step 11a)
+ruleset i: InitiatorId do
+  choose k: net do
+    rule 111 "initiator checks the exchange verification value (step 11a)"
+      
+      ini[i].state = I_WAIT_EVALUE &
+      net[k].dest = i &
+      !ismember(net[k].source, InitiatorId)
+
+    ==>
+      
+    var
+      inM: Message;
+
+    begin
+      inM := net[k];
+      multisetremove (k, net);
+
+      if inM.mType = M_ExchangeVerif & inM.hashed then
+        if inM.eValue.pka = i &
+           inM.eValue.pkb = ini[i].responder_pkb &
+           inM.eValue.na  = i &
+           inM.eValue.nb  = ini[i].responder_nb &
+           inM.eValue.r   = i & -- Eb should have r = ra
+           inM.eValue.source = ini[i].responder &
+           inM.eValue.dest   = i then
+          -- Verified so can complete phase 3
+          ini[i].state      := I_PHASETHREE_DONE;
+        else
+          --error "(step 11a) exchange verification did not match"
+        end;
+      end;
+    end;
   end;
 end;
 
@@ -581,34 +611,38 @@ ruleset j: ResponderId do
         multisetremove(k, net);
         pairing := res[j].pairings[i];
 
-        if inM.eValue.pka = pairing.initiator_pka &
-           inM.eValue.pkb = j &
-           inM.eValue.na  = pairing.initiator_na &
-           inM.eValue.nb  = j &
-           inM.eValue.nb  = pairing.initiator_ra &
-           inM.eValue.source = pairing.initiator &
-           inM.eValue.dest   = j then
-          -- Verified so send our EValue
-          undefine outEValue;
-          outEValue.pka     := pairing.initiator_pka;
-          outEValue.pkb     := j;
-          outEValue.na      := pairing.initiator_na;
-          outEValue.nb      := j;
-          outEValue.r       := pairing.initiator_ra;
-          outEValue.source  := j;
-          outEValue.dest    := pairing.initiator;
+        if inM.mType = M_ExchangeVerif & inM.hashed then
+          if inM.eValue.pka = pairing.initiator_pka &
+             inM.eValue.pkb = j &
+             inM.eValue.na  = pairing.initiator_na &
+             inM.eValue.nb  = j &
+             inM.eValue.r   = j &  -- Ea has r = rb
+             inM.eValue.source = pairing.initiator &
+             inM.eValue.dest   = j then
+            -- Verified so send our EValue
+            undefine outEValue;
+            outEValue.pka     := pairing.initiator_pka;
+            outEValue.pkb     := j;
+            outEValue.na      := pairing.initiator_na;
+            outEValue.nb      := j;
+            outEValue.r       := pairing.initiator_ra;
+            outEValue.source  := j;
+            outEValue.dest    := pairing.initiator;
 
-          undefine outM;
-          outM.mType        := M_ExchangeVerif;
-          outM.source       := j;
-          outM.dest         := pairing.initiator;  -- send to responder or intruder
-          outM.eValue       := outEValue;
-          outM.hashed       := true;
-          
-          multisetadd (outM, net);
-          
-          -- Update state to be done with phase 3
-          res[j].pairings[i].state := R_PHASETHREE_DONE;
+            undefine outM;
+            outM.mType        := M_ExchangeVerif;
+            outM.source       := j;
+            outM.dest         := pairing.initiator;  -- send to responder or intruder
+            outM.eValue       := outEValue;
+            outM.hashed       := true;
+            
+            multisetadd (outM, net);
+            
+            -- Update state to be done with phase 3
+            res[j].pairings[i].state := R_PHASETHREE_DONE;
+          else
+            --error "(step 10b) exchange verification did not match"
+          end;
         end;
       end;
     end;
