@@ -264,7 +264,7 @@ ruleset i: InitiatorId do
       multisetadd (outM, net);
       
       ini[i].state      := I_SENT_KEY;
-      ini[i].responder := j;
+      ini[i].responder  := j;
     end;
   end;
 end;
@@ -303,45 +303,50 @@ end;
 --------------------------------------------------------------------------------
 -- behavior of responder
 
--- responder i reacts to public key received from initiator or intruder j (step 1b)
+-- responder j reacts to public key received from initiator or intruder i (step 1b)
 ruleset j: ResponderId do
-  ruleset i: AgentId do
-    choose k: net do
-      rule 11 "Responder sends back public key (step 1b)"
-    
-        res[j].state = I_SLEEP &
-        !ismember(i, ResponderId) &
-        net[k].dest = j &
-        multisetcount (l:net, true) < NetworkSize
-    
-    ==>
-    
-    var
-      outM: Message;
-    
-    begin
-      undefine outM;
-      outM.mType        := M_PublicKey;
-      outM.source       := j;
-      outM.dest         := i;
-      outM.hashed       := false;
+  choose k: net do
+    rule 11 "Responder sends back public key (step 1b)"
       
-      multisetadd (outM, net);
-      
-      res[j].state      := R_SENT_KEY;
-      res[j].initiator  := i;
-    end;
+      !ismember(net[k].source, ResponderId) &
+      net[k].dest = j &
+      multisetcount(l:res[j].pairings, l.initiator = net[k].source) = 0 &
+      multisetcount(l:res[j].pairings, true) < MaxInitiators &
+      multisetcount (l:net, true) <= NetworkSize
+  
+  ==>
+  
+  var
+    pairing: Pairing;
+    outM: Message;
+  
+  begin
+    undefine pairing;
+    pairing.initiator := net[k].source;
+    pairing.state     := R_SLEEP;
+    
+    undefine outM;
+    outM.mType        := M_PublicKey;
+    outM.source       := j;
+    outM.dest         := paring.initiator;
+    outM.hashed       := false;
+    
+    multisetremove (k, net);
+    multisetadd (outM, net);
+    
+    -- change the pairings to key sent after we sent the key
+    pairing.state      := R_SENT_KEY;
+    
+    multisetadd (pairing, res[j].pairings)
   end;
 end;
 
 -- responder j computes commitment and sends to initiator i (step 3c)
 ruleset j: ResponderId do
-  ruleset i: AgentId do
+  choose i: res[j].pairings do
     rule 40 "Responder sends commitment to initiator (step 4)"
       
-      res[j].state = R_SENT_KEY &
-      !ismember(i, ResponderId) &
-      ini[i].state = I_SENT_KEY &
+      res[j].pairings[i].state = R_SENT_KEY &
       multisetcount (l:net, true) < NetworkSize
     
     ==>
@@ -352,7 +357,7 @@ ruleset j: ResponderId do
     
     begin
       undefine outCValue;
-      outCValue.pka     := i;
+      outCValue.pka     := res[j].pairings[i].initiator;
       outCValue.pkb     := j;
       outCValue.nb      := j;
       undefine outCValue.na;
@@ -360,12 +365,12 @@ ruleset j: ResponderId do
       undefine outM;
       outM.mType        := M_CommitValue;
       outM.source       := j;
-      outM.dest         := i;
+      outM.dest         := res[j].pairings[i].initiator;
       outM.cValue       := outCValue;
       
       multisetadd (outM, net);
       
-      res[j].state      := R_WAIT_NONCE;
+      res[j].pairings[i].state      := R_WAIT_NONCE;
     end;
   end;
 end;
