@@ -138,5 +138,27 @@ type
   AgentId:      union {InitiatorId, ResponderId, IntruderId};
 
   MessageType : enum {    -- different types of messages
-    
+    M_PublicKey,          -- phase 1: Public Key Exchange - PKa/PKb
+    M_CommitValue,        -- phase 2: Authentication Stage 1 - Ca/Cb
+    M_Nonce,              -- phase 2: Authentication Stage 1 - Na/Nb
+    M_ExchangeVerif       -- phase 3: Authentication Stage 2 - Ea/Eb
+  };
+
+  Message : record
+    mType:      MessageType;  -- message type
+    source:     AgentId;      -- source of message
+    dest:       AgentId;      -- intended destination of message
+    hashed:     boolean;      -- whether message is hashed value
+
+    nonce:      AgentId;      -- nonce from source to dest
+    addrMaster: AgentId;      -- The address of the initiator of the pairing
+    addrSlave:  AgentId;      -- The address of the non-initiator
+  end;
+
+  InitiatorStates: enum {
+    I_SLEEP,          -- state after initialization
+    I_SENT_KEY,       -- just sent public key
+    I_WAIT_CVALUE,    -- waiting on phase 2 commit value from non-initiator
+    I_WAIT_NONCE,     -- waiting on phase 2 nonce value from non-initiator
+
   };
