@@ -24,6 +24,8 @@
 --    
 --    Both now compute DHKey = P192(SKa, PKb)
 --
+--  P192 - DH based off Elliptic Curve - Assumed Secure
+--
 --------------------------------------------------------------------------------
 --
 --  Phase 2: Authentication Stage 1 - Note This Varies for Each Model
@@ -40,6 +42,8 @@
 --    A: Va = g(PKa, PKb, Na, Nb)
 --    B: Vb = g(PKa, PKb, Na, Nb)
 --    User Enters "Okay" if both are equal.
+--
+--    g is SHA-256 hash function on the concatenation of the inputs.
 --
 --  + Just Works
 --    ==========
@@ -71,6 +75,10 @@
 --    A -> B: Na
 --    B -> A: Nb
 --
+--
+--  f1 - 128-bit Commitment Value based off HMAC-SHA-256 with 128-bit key X
+--  (First public key input).
+--
 --------------------------------------------------------------------------------
 --
 --  Phase 3: Authentication Stage 2
@@ -83,6 +91,9 @@
 --    A: If f3(DHKey, Nb, Na, ra, IOcapB, AddrB, AddrA) != Eb then ABORT
 --    B: If f3(DHKey, Na, Nb, rb, IOcapA, AddrA, AddrB) != Ea then ABORT
 --
+--  f3 - Authentication Stage Check Value based off HMAC-SHA-256 with a
+--  192-bit key W (Input DHKey)
+--
 --------------------------------------------------------------------------------
 --
 --  Phase 4: Link Key Calculations
@@ -91,6 +102,9 @@
 --    B: Non-Initiating Device
 --
 --    A/B: Both compute LK = f2(DHKey, Na, Nb, "btlk", AddrA, AddrB)
+--
+--  f2 is HMAC-SHA-256 with 192-bit key W (Input DHKey) bt outputs the
+--  128-bit most significant bits of output.
 --
 --------------------------------------------------------------------------------
 --
