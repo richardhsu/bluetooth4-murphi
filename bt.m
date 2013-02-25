@@ -172,8 +172,64 @@ type
     
     -- Phase 3
     I_WAIT_EVALUE,
-    I_ACCEPT_EX,
+    I_ACCEPTED_EX,
 
     -- Phase 4/5
-    I_COMMIT
+    I_COMMITTED
   };
+  
+  Initiator: record
+    state: InitiatorStates;
+    responder: AgentId;
+  end;
+  
+  ResponderStates: enum {
+    -- Phase 1
+    R_SLEEP,              -- state after initialization
+    R_SENT_KEY,       -- just sent public key
+
+    -- Phase 2
+    -- Just Works and Numeric Comparison [CVALUE -> NONCE -> VERIFIED]
+    -- Passkey Entry [NONCE -> CVALUE -> VERIFIED]
+    -- Out of Band [NONCE -> VERIFIED]
+    -- R_SENT_CVALUE,    -- waiting on phase 2 commit value from non-initiator
+    R_WAIT_NONCE,     -- waiting on phase 2 nonce value from non-initiator
+    R_VERIFIED,       -- complete phase 2 exchange and verified
+    
+    -- Phase 3
+    R_WAIT_EVALUE,
+    R_ACCEPTED_EX,
+
+    -- Phase 4/5
+    R_COMMITTED
+  };
+  
+  Responder: record
+    state: ResponderStates;
+    initiator: AgentId;
+  end;
+  
+  Intruder: record 
+    messages: multiset[MaxKnowledge] of Message;
+  end;
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
