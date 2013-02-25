@@ -138,6 +138,7 @@ type
 
   AgentId:      union {InitiatorId, ResponderId, IntruderId};
   
+  -- CValue
   CValue : record
     pka:        AgentId;
     pkb:        AgentId;
@@ -172,9 +173,6 @@ type
     I_PHASEONE_DONE,  -- received public key from b
 
     -- Phase 2
-    -- Just Works and Numeric Comparison [CVALUE -> NONCE -> VERIFIED]
-    -- Passkey Entry [NONCE -> CVALUE -> VERIFIED]
-    -- Out of Band [NONCE -> VERIFIED]
     I_WAIT_NONCE,     -- waiting on phase 2 nonce value from non-initiator
     I_VERIFIED,       -- complete phase 2 exchange and verified
     
@@ -200,12 +198,8 @@ type
     R_PHASEONE_DONE,      -- just sent public key and finished with phase 1
 
     -- Phase 2
-    -- Just Works and Numeric Comparison [CVALUE -> NONCE -> VERIFIED]
-    -- Passkey Entry [NONCE -> CVALUE -> VERIFIED]
-    -- Out of Band [NONCE -> VERIFIED]
-    -- R_SENT_CVALUE,    -- waiting on phase 2 commit value from non-initiator
     R_WAIT_NONCE,     -- waiting on phase 2 nonce value from non-initiator
-    R_VERIFIED,       -- complete phase 2 exchange and verified
+    R_PHASETWO_DONE,       -- complete phase 2 exchange and verified
     
     -- Phase 3
     R_WAIT_EVALUE,
@@ -307,7 +301,6 @@ end;
 -- initiator i reacts to commit value from responder and sends nonce (step 5)
 ruleset i: InitiatorId do
   choose j: net do
-    -- Numeric Comparison Rule
     rule 50 "initiator reacts to commit value received and sends nonce (step 5)"
 
       ini[i].state = I_PHASEONE_DONE &
@@ -323,9 +316,9 @@ ruleset i: InitiatorId do
       inM := net[j];
       multisetremove (j, net);
 
-      if inM.mType = M_CommitValue then -- correct message type
+      if inM.mType = M_CommitValue & inM.hashed then -- correct message type
         if inM.source = ini[i].responder then
-          ini[i].responder_cb := inM.cValue;  -- store information
+          ini[i].responder_cb := inM.cValue;  -- store cb information
 
           -- send nonce to responder
           undefine outM;
@@ -344,8 +337,6 @@ ruleset i: InitiatorId do
   end;
 end;
 
-
--- TODO: FIX as it is not complete with check
 -- initiator i reacts to nonce received and checks CValue (step 6a)
 ruleset i: InitiatorId do
   choose j: net do
@@ -457,6 +448,46 @@ ruleset j: ResponderId do
       multisetadd (outM, net);
       
       res[j].pairings[i].state      := R_WAIT_NONCE;
+    end;
+  end;
+end;
+
+-- responder j responds to nonce and sends nonce to initiator (step 6)
+ruleset j: ResponderId do
+  choose k: net do
+    choose i: res[j].pairings do
+      rule 60 "responder gets nonce from and sends nonce to initiator (step 6)"
+        
+        net[k].source = res[j].pairings[i].initiator &
+        res[j].pairings[i].state = R_WAIT_NONCE &
+        multisetcount (l:net, true) <= NetworkSize
+      
+      ==>
+      
+      var
+        inM: Message;
+        outM: Message;
+        outCValue: CValue;
+      
+      begin
+        inM               := net[k];
+        multisetremove(k, net);
+
+        if inM.mType = M_Nonce then
+          res[j].pairings[i].initiator_na := inM.nonce;
+          
+          undefine outM;
+          outM.mType        := M_Nonce;
+          outM.source       := j;
+          outM.dest         := res[j].pairings[i].initiator;
+          outM.nonce        := j;
+          outM.hashed       := true;
+          
+          multisetadd (outM, net);
+          
+          res[j].pairings[i].state      := R_PHASETWO_DONE;
+        end;
+      end;
     end;
   end;
 end;
