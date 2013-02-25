@@ -127,21 +127,20 @@ const
   MaxInitiators:  7;  -- maximum number of initiators per responder
   NumResponders:  1;  -- number of responders
   NumIntruders:   1;  -- number of intruders
-  NetworkSize:    1;  -- max. number of outstanding messages in network
+  NetworkSize:   10;  -- max. number of outstanding messages in network
   MaxKnowledge:  10;  -- max. number of messages intruder can remember
 
 -- -----------------------------------------------------------------------------
 type
   InitiatorId:  scalarset (NumInitiators);  -- identifiers
   ResponderId:  scalarset (NumResponders);
-  IntruderId:    scalarset (NumIntruders);
+  IntruderId:   scalarset (NumIntruders);
 
   AgentId:      union {InitiatorId, ResponderId, IntruderId};
   
   CValue : record
     pka:        AgentId;
     pkb:        AgentId;
-    na:         AgentId;
     nb:         AgentId;
   end;
   
@@ -159,7 +158,8 @@ type
     hashed:     boolean;      -- whether message is hashed value
 
     nonce:      AgentId;      -- nonce from source to dest
-    cValue:     CValue;      -- commit value (Phase 2)
+    publickey:  AgentId;      -- public key
+    cValue:     CValue;       -- commit value (Phase 2)
     eValue:     AgentId;      -- exchange verification value (Phase 3)
     addrMaster: AgentId;      -- The address of the initiator of the pairing
     addrSlave:  AgentId;      -- The address of the non-initiator
@@ -169,12 +169,12 @@ type
     -- Phase 1
     I_SLEEP,          -- state after initialization
     I_SENT_KEY,       -- just sent public key
+    I_PHASEONE_DONE,  -- received public key from b
 
     -- Phase 2
     -- Just Works and Numeric Comparison [CVALUE -> NONCE -> VERIFIED]
     -- Passkey Entry [NONCE -> CVALUE -> VERIFIED]
     -- Out of Band [NONCE -> VERIFIED]
-    I_WAIT_CVALUE,    -- waiting on phase 2 commit value from non-initiator
     I_WAIT_NONCE,     -- waiting on phase 2 nonce value from non-initiator
     I_VERIFIED,       -- complete phase 2 exchange and verified
     
@@ -189,15 +189,15 @@ type
   Initiator: record
     state: InitiatorStates;
     responder: AgentId;
-    responder_pkb: AgentId;
-    responder_nb: AgentId;
-    responder_cb: CValue;
+    responder_pkb: AgentId;   -- recieved public key in phase 1
+    responder_nb: AgentId;    -- recieved nonce in phase 2
+    responder_cb: CValue;     -- received commitment value
   end;
   
   ResponderStates: enum {
     -- Phase 1
     R_SLEEP,              -- state after initialization
-    R_SENT_KEY,       -- just sent public key
+    R_PHASEONE_DONE,      -- just sent public key and finished with phase 1
 
     -- Phase 2
     -- Just Works and Numeric Comparison [CVALUE -> NONCE -> VERIFIED]
@@ -216,8 +216,11 @@ type
   };
   
   Pairing: record
-    state: ResponderStates;
-    initiator: AgentId;
+    state:          ResponderStates;
+    initiator:      AgentId;
+    initiator_pka:  AgentId;    -- recieved public key in phase 1
+    initiator_na:   AgentId;    -- recieved nonce in phase 2
+    initiator_ca:   CValue;     -- received commitment value
   end;
   
   Responder: record
@@ -233,7 +236,7 @@ var
   net: multiset[NetworkSize] of Message;  -- network
   ini: array[InitiatorId] of Initiator;   -- initiators
   res: array[ResponderId] of Responder;   -- responders
-  int: array[IntruderId] of Intruder;    -- intruders
+  int: array[IntruderId] of Intruder;     -- intruders
 
 --------------------------------------------------------------------------------
 -- rules
@@ -242,11 +245,11 @@ var
 --------------------------------------------------------------------------------
 -- behavior of initiator
 
--- Phase 1
+-- Phase 1 =====================================================================
 -- initiator i starts protocol with responder or intruder j (step 1a)
 ruleset i: InitiatorId do
   ruleset j: AgentId do
-    rule 10 "Initiator starts protocol (step 1a)"
+    rule 10 "initiator starts protocol (step 1a)"
       
       ini[i].state = I_SLEEP &
       !ismember(j, InitiatorId) &
@@ -261,7 +264,8 @@ ruleset i: InitiatorId do
       undefine outM;
       outM.mType        := M_PublicKey;
       outM.source       := i;
-      outM.dest         := j;
+      outM.dest         := j;   -- send to responder or intruder
+      outM.publickey    := i;   -- attach public key of initiator
       outM.hashed       := false;
       
       multisetadd (outM, net);
@@ -272,7 +276,76 @@ ruleset i: InitiatorId do
   end;
 end;
 
--- Phase 2
+-- initiator i reacts to public key from responder or intruder (step 1b done)
+ruleset i: InitiatorId do
+  choose k: net do
+    rule 12 "initiator reacts to public key response (step 1b done)"
+      
+      ini[i].state = I_SENT_KEY &
+      net[k].dest = i
+  
+    ==>
+    
+    var
+      inM: Message;
+    
+    begin
+      inM := net[k];
+      multisetremove (k, net);
+
+      if inM.mType = M_PublicKey then
+        if inM.source = ini[i].responder then
+          ini[i].responder_pkb  := inM.publickey;
+          ini[i].state          := I_PHASEONE_DONE;
+        end;
+      end;
+    end;
+  end;
+end;
+
+-- Phase 2 =====================================================================
+-- initiator i reacts to commit value from responder and sends nonce (step 5)
+ruleset i: InitiatorId do
+  choose j: net do
+    -- Numeric Comparison Rule
+    rule 50 "initiator reacts to commit value received and sends nonce (step 5)"
+
+      ini[i].state = I_PHASEONE_DONE &
+      net[j].dest = i
+
+    ==>
+
+    var
+      inM:  Message;  -- incoming message
+      outM: Message;  -- outgoing message
+
+    begin
+      inM := net[j];
+      multisetremove (j, net);
+
+      if inM.mType = M_CommitValue then -- correct message type
+        if inM.source = ini[i].responder then
+          ini[i].responder_cb := inM.cValue;  -- store information
+
+          -- send nonce to responder
+          undefine outM;
+          outM.mType        := M_Nonce;
+          outM.source       := i;
+          outM.dest         := ini[i].responder;
+          outM.nonce        := i;
+          outM.hashed       := false;
+
+          multisetadd (outM, net);
+
+          ini[i].state := I_WAIT_NONCE;
+        end;
+      end;
+    end;
+  end;
+end;
+
+
+-- TODO: FIX as it is not complete with check
 -- initiator i reacts to nonce received and checks CValue (step 6a)
 ruleset i: InitiatorId do
   choose j: net do
@@ -289,7 +362,7 @@ ruleset i: InitiatorId do
 
     begin
       inM := net[j];
-      multisetremove (j,net);
+      multisetremove (j, net);
 
       if inM.mType = M_Nonce then -- correct message type
         if inM.source = ini[i].responder then
@@ -305,15 +378,17 @@ end;
 --------------------------------------------------------------------------------
 -- behavior of responder
 
--- responder j reacts to public key received from initiator or intruder i (step 1b)
+-- Phase 1 =====================================================================
+-- responder j reacts to public key from initiator or intruder i (step 1b)
 ruleset j: ResponderId do
   choose k: net do
-    rule 11 "Responder sends back public key (step 1b)"
+    rule 11 "responder reacts to public key and sends back pkb (step 1b)"
       
       !ismember(net[k].source, ResponderId) &
       net[k].dest = j &
-      multisetcount(l:res[j].pairings, res[j].pairings[l].initiator = net[k].source) = 0 &
-      multisetcount(l:res[j].pairings, true) < MaxInitiators &
+      multisetcount (l:res[j].pairings, 
+                     res[j].pairings[l].initiator = net[k].source) = 0 &
+      multisetcount (l:res[j].pairings, true) < MaxInitiators &
       multisetcount (l:net, true) <= NetworkSize
   
     ==>
@@ -321,35 +396,43 @@ ruleset j: ResponderId do
     var
       pairing: Pairing;
       outM: Message;
+      inM: Message;
     
     begin
-      undefine pairing;
-      pairing.initiator := net[k].source;
-      pairing.state     := R_SLEEP;
-      
-      undefine outM;
-      outM.mType        := M_PublicKey;
-      outM.source       := j;
-      outM.dest         := pairing.initiator;
-      outM.hashed       := false;
-      
+      inM := net[k];
       multisetremove (k, net);
-      multisetadd (outM, net);
-      
-      -- change the pairings to key sent after we sent the key
-      pairing.state      := R_SENT_KEY;
-      
-      multisetadd (pairing, res[j].pairings)
+
+      if inM.mType = M_PublicKey then
+        undefine pairing;                         -- set up the pairing info
+        pairing.initiator     := inM.source;
+        pairing.state         := R_SLEEP;
+        pairing.initiator_pka := inM.publickey;
+        
+        undefine outM;
+        outM.mType        := M_PublicKey;
+        outM.source       := j;
+        outM.dest         := pairing.initiator;
+        outM.hashed       := false;
+        outM.publickey    := j;                   -- responder public key
+        
+        multisetadd (outM, net);
+        
+        -- change the pairings to done with phase 1 after we sent the key
+        pairing.state      := R_PHASEONE_DONE;
+        
+        multisetadd (pairing, res[j].pairings);
+      end;
     end;
   end;
 end;
 
--- responder j computes commitment and sends to initiator i (step 3c)
+-- Phase 2 =====================================================================
+-- responder j computes commitment and sends to initiator i (step 4)
 ruleset j: ResponderId do
   choose i: res[j].pairings do
-    rule 40 "Responder sends commitment to initiator (step 4)"
+    rule 40 "responder sends commitment value to initiator (step 4)"
       
-      res[j].pairings[i].state = R_SENT_KEY &
+      res[j].pairings[i].state = R_PHASEONE_DONE &
       multisetcount (l:net, true) < NetworkSize
     
     ==>
@@ -360,16 +443,16 @@ ruleset j: ResponderId do
     
     begin
       undefine outCValue;
-      outCValue.pka     := res[j].pairings[i].initiator;
+      outCValue.pka     := res[j].pairings[i].initiator_pka;
       outCValue.pkb     := j;
       outCValue.nb      := j;
-      undefine outCValue.na;
       
       undefine outM;
       outM.mType        := M_CommitValue;
       outM.source       := j;
       outM.dest         := res[j].pairings[i].initiator;
       outM.cValue       := outCValue;
+      outM.hashed       := true;
       
       multisetadd (outM, net);
       
@@ -377,6 +460,10 @@ ruleset j: ResponderId do
     end;
   end;
 end;
+
+--------------------------------------------------------------------------------
+-- start state
+--------------------------------------------------------------------------------
 
 startstate
   -- initialize initiators
@@ -399,11 +486,12 @@ startstate
   undefine net;
 end;
 
+--------------------------------------------------------------------------------
 -- invariants
+--------------------------------------------------------------------------------
 
 invariant "initiator correctly authenticated"
-  forall i: ResponderId do
-    true
-    ->
-    true
+  forall i: InitiatorId do
+    -- TODO: change to !ismember(ini[i].responder, IntruderId) and it will fail
+    true 
   end;
