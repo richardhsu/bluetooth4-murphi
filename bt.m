@@ -136,7 +136,14 @@ type
   IntuderId:    scalarset (NumIntruders);
 
   AgentId:      union {InitiatorId, ResponderId, IntruderId};
-
+  
+  CValue : record
+    pka:        AgentId;
+    pkb:        AgentId;
+    na:         AgentId;
+    nb:         AgentId;
+  end;
+  
   MessageType : enum {    -- different types of messages
     M_PublicKey,          -- phase 1: Public Key Exchange - PKa/PKb
     M_CommitValue,        -- phase 2: Authentication Stage 1 - Ca/Cb
@@ -151,7 +158,7 @@ type
     hashed:     boolean;      -- whether message is hashed value
 
     nonce:      AgentId;      -- nonce from source to dest
-    cValue:     AgentId;      -- commit value (Phase 2)
+    cValue:     CValue;      -- commit value (Phase 2)
     eValue:     AgentId;      -- exchange verification value (Phase 3)
     addrMaster: AgentId;      -- The address of the initiator of the pairing
     addrSlave:  AgentId;      -- The address of the non-initiator
@@ -274,11 +281,13 @@ end;
 -- responder i reacts to public key received from initiator or intruder j (step 1b)
 ruleset j: ResponderId do
   ruleset i: AgentId do
-    rule 11 "Responder sends back public key (step 1b)"
+    choose k: net do
+      rule 11 "Responder sends back public key (step 1b)"
     
-      res[j].state = I_SLEEP &
-      !ismember(i, ResponderId) &
-      multisetcount (l:net, true) < NetworkSize
+        res[j].state = I_SLEEP &
+        !ismember(i, ResponderId) &
+        net[k].dest = j &
+        multisetcount (l:net, true) < NetworkSize
     
     ==>
     
@@ -299,7 +308,46 @@ ruleset j: ResponderId do
     end;
   end;
 end;
-  
+
+-- responder j computes commitment and sends to initiator i (step 3c)
+ruleset j: ResponderId do
+  ruleset i: AgentId do
+    rule 40 "Responder sends commitment to initiator (step 4)"
+      
+      res[j].state = R_SENT_KEY &
+      !ismember(i, ResponderId) &
+      ini[i].state = I_SENT_KEY &
+      multisetcount (l:net, true) < NetworkSize
+    
+    ==>
+    
+    var
+      outM: Message;
+      outCValue: CValue;
+    
+    begin
+      undefine outCValue;
+      outCValue.pka     := i;
+      outCValue.pkb     := j;
+      outCValue.nb      := j;
+      undefine outCValue.na;
+      
+      undefine outM;
+      outM.mType        := M_CommitValue;
+      outM.source       := j;
+      outM.dest         := i;
+      outM.cValue       := outCValue;
+      
+      multisetadd (outM, net);
+      
+      res[j].state      := R_WAIT_NONCE;
+    end;
+  end;
+end;
+      
+      
+
+
   
   
   
