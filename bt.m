@@ -213,7 +213,64 @@ type
     messages: multiset[MaxKnowledge] of Message;
   end;
   
+  -- initiator i starts protocol with responder or intruder j (step 1a)
+  ruleset i: InitiatorId do
+    ruleset j: AgentId do
+      rule 10 "Initiator starts protocol (step 1a)"
+        
+        init[i].state = I_SLEEP &
+        !ismember(j, InitiatorId) &
+        multisetcount(l: net, true) < NetworkSize
+        
+      ==>
+        
+      var
+        outM: Message;
+      
+      begin
+        undefine outM;
+        outM.mType        := M_PublicKey;
+        outM.source       := i;
+        outM.dest         := j;
+        outM.hashed       := false;
+        
+        multisetadd (outM, net);
+        
+        ini[i].state      := I_SENT_KEY;
+        init[i].responder := j;
+      end;
+    end;
+  end;
   
+  
+  -- responder i reacts to public key received from initiator or intruder j (step 1b)
+  ruleset j: ResponderId do
+    ruleset i: AgentId do
+      rule 11 "Responder sends back public key (step 1b)"
+      
+        res[j].state = I_SLEEP &
+        !ismember(i, ResponderId) &
+        multisetcount (l:net, true) < NetworkSize
+      
+      ==>
+      
+      var
+        outM: Message;
+      
+      begin
+        undefine outM;
+        outM.mType        := M_PublicKey;
+        outM.source       := j;
+        outM.dest         := i;
+        outM.hashed       := false;
+        
+        multisetadd (outM, net);
+        
+        res[j].state      := R_SENT_KEY;
+        res[j].initiator  := i;
+      end;
+    end;
+  end;
   
   
   
