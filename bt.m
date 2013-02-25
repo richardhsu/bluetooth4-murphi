@@ -151,14 +151,29 @@ type
     hashed:     boolean;      -- whether message is hashed value
 
     nonce:      AgentId;      -- nonce from source to dest
+    cValue:     AgentId;      -- commit value (Phase 2)
+    eValue:     AgentId;      -- exchange verification value (Phase 3)
     addrMaster: AgentId;      -- The address of the initiator of the pairing
     addrSlave:  AgentId;      -- The address of the non-initiator
   end;
 
   InitiatorStates: enum {
+    -- Phase 1
     I_SLEEP,          -- state after initialization
     I_SENT_KEY,       -- just sent public key
+
+    -- Phase 2
+    -- Just Works and Numeric Comparison [CVALUE -> NONCE -> VERIFIED]
+    -- Passkey Entry [NONCE -> CVALUE -> VERIFIED]
+    -- Out of Band [NONCE -> VERIFIED]
     I_WAIT_CVALUE,    -- waiting on phase 2 commit value from non-initiator
     I_WAIT_NONCE,     -- waiting on phase 2 nonce value from non-initiator
+    I_VERIFIED,       -- complete phase 2 exchange and verified
+    
+    -- Phase 3
+    I_WAIT_EVALUE,
+    I_ACCEPT_EX,
 
+    -- Phase 4/5
+    I_COMMIT
   };
