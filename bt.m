@@ -140,9 +140,20 @@ type
   
   -- CValue
   CValue : record
-    pka:        AgentId;
-    pkb:        AgentId;
-    nb:         AgentId;
+    pka:  AgentId;
+    pkb:  AgentId;
+    nb:   AgentId;
+  end;
+
+  -- EValue
+  EValue : record
+    pka:    AgentId;  -- pka and pkb in conjunction should be checked as DHKey
+    pkb:    AgentId;
+    na:     AgentId;  -- nonce value exchanged in phase 2
+    nb:     AgentId;  -- nonce value exchanged in phase 2
+    r:      AgentId;  -- random ra/rb value in phase 2
+    source: AgentId;  -- address of who is sending
+    dest:   AgentId;  -- address of who is receiving
   end;
   
   MessageType : enum {    -- different types of messages
@@ -161,7 +172,7 @@ type
     nonce:      AgentId;      -- nonce from source to dest
     publickey:  AgentId;      -- public key
     cValue:     CValue;       -- commit value (Phase 2)
-    eValue:     AgentId;      -- exchange verification value (Phase 3)
+    eValue:     EValue;       -- exchange verification value (Phase 3)
     addrMaster: AgentId;      -- The address of the initiator of the pairing
     addrSlave:  AgentId;      -- The address of the non-initiator
   end;
@@ -178,7 +189,7 @@ type
     
     -- Phase 3
     I_WAIT_EVALUE,
-    I_ACCEPTED_EX,
+    I_PHASETHREE_DONE,
 
     -- Phase 4/5
     I_COMMITTED
@@ -188,6 +199,7 @@ type
     state: InitiatorStates;
     responder: AgentId;
     responder_pkb: AgentId;   -- recieved public key in phase 1
+    responder_rb: AgentId;    -- recieved rb value if any
     responder_nb: AgentId;    -- recieved nonce in phase 2
     responder_cb: CValue;     -- received commitment value
   end;
@@ -202,8 +214,7 @@ type
     R_PHASETWO_DONE,  -- complete phase 2 exchange and verified
     
     -- Phase 3
-    R_WAIT_EVALUE,
-    R_ACCEPTED_EX,
+    R_PHASETHREE_DONE,
 
     -- Phase 4/5
     R_COMMITTED
@@ -213,6 +224,7 @@ type
     state:          ResponderStates;
     initiator:      AgentId;
     initiator_pka:  AgentId;    -- recieved public key in phase 1
+    initiator_ra:   AgentId;    -- received random value
     initiator_na:   AgentId;    -- recieved nonce in phase 2
     initiator_ca:   CValue;     -- received commitment value
   end;
@@ -331,6 +343,8 @@ ruleset i: InitiatorId do
           multisetadd (outM, net);
 
           ini[i].state := I_WAIT_NONCE;
+          -- ra = rb = 0 in protocol we'll use their IDs to model who sent it
+          ini[i].responder_rb := ini[i].responder;
         end;
       end;
     end;
@@ -374,7 +388,41 @@ ruleset i: InitiatorId do
 end;
 
 -- Phase 3 =====================================================================
--- TODO:
+-- initiator i initiates the exchange verification stage (step 10)
+ruleset i: InitiatorId do
+  rule 100 "initiator initiates the exchange verification (step 10)"
+    
+    ini[i].state = I_PHASETWO_DONE &
+    multisetcount(l: net, true) < NetworkSize
+    
+  ==>
+    
+  var
+    outM: Message;
+    outEValue: EValue;
+
+  begin
+    undefine outEValue;
+    outEValue.pka     := i;
+    outEValue.pkb     := ini[i].responder_pkb;
+    outEValue.na      := i;
+    outEValue.nb      := ini[i].responder_nb;
+    outEValue.r       := ini[i].responder_rb;
+    outEValue.source  := i;
+    outEValue.dest    := ini[i].responder;
+
+    undefine outM;
+    outM.mType        := M_ExchangeVerif;
+    outM.source       := i;
+    outM.dest         := ini[i].responder;  -- send to responder or intruder
+    outM.eValue       := outEValue;
+    outM.hashed       := true;
+    
+    multisetadd (outM, net);
+    
+    ini[i].state      := I_WAIT_EVALUE;
+  end;
+end;
 
 --------------------------------------------------------------------------------
 -- behavior of responder
@@ -457,7 +505,8 @@ ruleset j: ResponderId do
       
       multisetadd (outM, net);
       
-      res[j].pairings[i].state      := R_WAIT_NONCE;
+      res[j].pairings[i].state        := R_WAIT_NONCE;
+      res[j].pairings[i].initiator_ra := res[j].pairings[i].initiator;
     end;
   end;
 end;
@@ -468,8 +517,9 @@ ruleset j: ResponderId do
     choose i: res[j].pairings do
       rule 60 "responder gets nonce from and sends nonce to initiator (step 6)"
         
-        net[k].source = res[j].pairings[i].initiator &
         res[j].pairings[i].state = R_WAIT_NONCE &
+        net[k].source = res[j].pairings[i].initiator &
+        net[k].dest = j &
         multisetcount (l:net, true) <= NetworkSize
       
       ==>
@@ -496,6 +546,69 @@ ruleset j: ResponderId do
           multisetadd (outM, net);
           
           res[j].pairings[i].state      := R_PHASETWO_DONE;
+        end;
+      end;
+    end;
+  end;
+end;
+
+-- Phase 3 =====================================================================
+-- responder j responds to exchange verification stage (step 10b/11)
+ruleset j: ResponderId do
+  choose k: net do
+    choose i: res[j].pairings do
+      rule 102 "responder responds to exchange verification (step 10b/11)"
+        
+        res[j].pairings[i].state = R_PHASETWO_DONE &
+        net[k].source = res[j].pairings[i].initiator &
+        net[k].dest = j &
+        multisetcount(l: net, true) <= NetworkSize
+        
+      ==>
+        
+      var
+        inM: Message;
+        outM: Message;
+        outEValue: EValue;
+        pairing: Pairing;
+
+      begin
+        -- First verify that the received EValue is correctly formed
+        -- We check hashes are equal by making sure all inputs are equal though
+        -- in general access to inputs isn't likely but we assume hash collision
+        -- resistent functions as we assume cryptographic primitives are secure
+        inM   := net[k];
+        multisetremove(k, net);
+        pairing := res[j].pairings[i];
+
+        if inM.eValue.pka = pairing.initiator_pka &
+           inM.eValue.pkb = j &
+           inM.eValue.na  = pairing.initiator_na &
+           inM.eValue.nb  = j &
+           inM.eValue.nb  = pairing.initiator_ra &
+           inM.eValue.source = pairing.initiator &
+           inM.eValue.dest   = j then
+          -- Verified so send our EValue
+          undefine outEValue;
+          outEValue.pka     := pairing.initiator_pka;
+          outEValue.pkb     := j;
+          outEValue.na      := pairing.initiator_na;
+          outEValue.nb      := j;
+          outEValue.r       := pairing.initiator_ra;
+          outEValue.source  := j;
+          outEValue.dest    := pairing.initiator;
+
+          undefine outM;
+          outM.mType        := M_ExchangeVerif;
+          outM.source       := j;
+          outM.dest         := pairing.initiator;  -- send to responder or intruder
+          outM.eValue       := outEValue;
+          outM.hashed       := true;
+          
+          multisetadd (outM, net);
+          
+          -- Update state to be done with phase 3
+          res[j].pairings[i].state := R_PHASETHREE_DONE;
         end;
       end;
     end;
