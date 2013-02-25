@@ -213,7 +213,18 @@ type
     messages: multiset[MaxKnowledge] of Message;
   end;
   
-  -- initiator i starts protocol with responder or intruder j (step 1a)
+-- -----------------------------------------------------------------------------
+var
+  net: multiset[NetworkSize] of Message;  -- network
+  ini: array[InitiatorId] of Initiator;   -- initiators
+  res: array[ResponderId] of Responder;   -- responders
+  int:  array[IntruderId] of Intruder;    -- intruders
+
+--------------------------------------------------------------------------------
+-- rules
+--------------------------------------------------------------------------------
+  
+-- initiator i starts protocol with responder or intruder j (step 1a)
   ruleset i: InitiatorId do
     ruleset j: AgentId do
       rule 10 "Initiator starts protocol (step 1a)"
@@ -272,10 +283,15 @@ type
     end;
   end;
   
-  
-  
-  
-  
+-- initiator i reacts to  commitment code received
+ruleset i: InitiatorId do
+  choose j: net do
+    rule 20 "initiator reacts to commitment code recieved (6a)"
+
+
+
+  end;
+end;
   
   
   
