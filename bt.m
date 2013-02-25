@@ -223,7 +223,11 @@ var
 --------------------------------------------------------------------------------
 -- rules
 --------------------------------------------------------------------------------
-  
+
+--------------------------------------------------------------------------------
+-- behavior of initiator
+
+-- Phase 1
 -- initiator i starts protocol with responder or intruder j (step 1a)
 ruleset i: InitiatorId do
   ruleset j: AgentId do
@@ -253,6 +257,19 @@ ruleset i: InitiatorId do
   end;
 end;
 
+-- Phase 2
+-- initiator i reacts to  commitment code received (step 6a)
+ruleset i: InitiatorId do
+  choose j: net do
+    rule 20 "initiator reacts to commitment code recieved (step 6a)"
+
+
+
+  end;
+end;
+
+--------------------------------------------------------------------------------
+-- behavior of responder
 
 -- responder i reacts to public key received from initiator or intruder j (step 1b)
 ruleset j: ResponderId do
@@ -280,16 +297,6 @@ ruleset j: ResponderId do
       res[j].state      := R_SENT_KEY;
       res[j].initiator  := i;
     end;
-  end;
-end;
-  
--- initiator i reacts to  commitment code received
-ruleset i: InitiatorId do
-  choose j: net do
-    rule 20 "initiator reacts to commitment code recieved (6a)"
-
-
-
   end;
 end;
   
