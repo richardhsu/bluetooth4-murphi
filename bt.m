@@ -374,20 +374,42 @@ ruleset j: ResponderId do
     end;
   end;
 end;
-      
-      
 
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+invariant "initiator correctly authenticated"
+  forall i: ResponderId do
+    true
+    ->
+    true
+  end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
