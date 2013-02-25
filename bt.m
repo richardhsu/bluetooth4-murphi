@@ -230,7 +230,7 @@ var
   net: multiset[NetworkSize] of Message;  -- network
   ini: array[InitiatorId] of Initiator;   -- initiators
   res: array[ResponderId] of Responder;   -- responders
-  int:  array[IntruderId] of Intruder;    -- intruders
+  int: array[IntruderId] of Intruder;    -- intruders
 
 --------------------------------------------------------------------------------
 -- rules
@@ -270,13 +270,33 @@ ruleset i: InitiatorId do
 end;
 
 -- Phase 2
--- initiator i reacts to  commitment code received (step 6a)
+-- initiator i reacts to nonce received and checks CValue (step 6a)
 ruleset i: InitiatorId do
   choose j: net do
-    rule 20 "initiator reacts to commitment code recieved (step 6a)"
+    -- Numeric Comparison Rule
+    rule 60 "initiator reacts to nonce recieved and checks CValue (step 6a)"
+      ini[i].state = I_WAIT_NONCE &
+      net[j].dest = i &
+      ismember(net[j].source,IntruderId)
+    ==>
+
+    var
+      outM: Message;  -- outgoing message
+      inM:  Message;  -- incoming message
+
+    begin
+      inM := net[j];
+      multisetremove (j,net);
+
+      if inM.mType = M_Nonce then -- correct message type
+        if inM.source = ini[i].responder then
+          
 
 
+        end;
+      end;
 
+    end;
   end;
 end;
 
