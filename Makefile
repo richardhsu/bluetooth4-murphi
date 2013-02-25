@@ -6,10 +6,10 @@
 MURPHI = /bin/mu
 
 CXX = g++ -DCATCH_DIV -fno-default-inline -Wno-deprecated                           
-INCLUDE = /include/                                                               
+INCLUDE = ./include/                                                               
                                                                                     
 bt: bt.cpp                                                                          
-	  ${CXX} -I${INCLUDE} bt.cpp -o ns -lm                                              
+	  ${CXX} -I${INCLUDE} bt.cpp -o bt -lm                                              
 		                                                                                    
 bt.cpp: bt.m                                                                        
 	  ${MURPHI} ${MOPTS} bt.m                                                           

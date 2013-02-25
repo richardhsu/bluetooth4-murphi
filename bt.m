@@ -134,7 +134,7 @@ const
 type
   InitiatorId:  scalarset (NumInitiators);  -- identifiers
   ResponderId:  scalarset (NumResponders);
-  IntuderId:    scalarset (NumIntruders);
+  IntruderId:    scalarset (NumIntruders);
 
   AgentId:      union {InitiatorId, ResponderId, IntruderId};
   
@@ -215,13 +215,13 @@ type
     R_COMMITTED
   };
   
-  Responder: record
-    pairings: multiset[MaxInitiators] of Pairing;
-  end;
-  
   Pairing: record
     state: ResponderStates;
     initiator: AgentId;
+  end;
+  
+  Responder: record
+    pairings: multiset[MaxInitiators] of Pairing;
   end;
   
   Intruder: record 
@@ -248,7 +248,7 @@ ruleset i: InitiatorId do
   ruleset j: AgentId do
     rule 10 "Initiator starts protocol (step 1a)"
       
-      init[i].state = I_SLEEP &
+      ini[i].state = I_SLEEP &
       !ismember(j, InitiatorId) &
       multisetcount(l: net, true) < NetworkSize
       
@@ -312,34 +312,35 @@ ruleset j: ResponderId do
       
       !ismember(net[k].source, ResponderId) &
       net[k].dest = j &
-      multisetcount(l:res[j].pairings, l.initiator = net[k].source) = 0 &
+      multisetcount(l:res[j].pairings, res[j].pairings[l].initiator = net[k].source) = 0 &
       multisetcount(l:res[j].pairings, true) < MaxInitiators &
       multisetcount (l:net, true) <= NetworkSize
   
-  ==>
-  
-  var
-    pairing: Pairing;
-    outM: Message;
-  
-  begin
-    undefine pairing;
-    pairing.initiator := net[k].source;
-    pairing.state     := R_SLEEP;
+    ==>
     
-    undefine outM;
-    outM.mType        := M_PublicKey;
-    outM.source       := j;
-    outM.dest         := paring.initiator;
-    outM.hashed       := false;
+    var
+      pairing: Pairing;
+      outM: Message;
     
-    multisetremove (k, net);
-    multisetadd (outM, net);
-    
-    -- change the pairings to key sent after we sent the key
-    pairing.state      := R_SENT_KEY;
-    
-    multisetadd (pairing, res[j].pairings)
+    begin
+      undefine pairing;
+      pairing.initiator := net[k].source;
+      pairing.state     := R_SLEEP;
+      
+      undefine outM;
+      outM.mType        := M_PublicKey;
+      outM.source       := j;
+      outM.dest         := pairing.initiator;
+      outM.hashed       := false;
+      
+      multisetremove (k, net);
+      multisetadd (outM, net);
+      
+      -- change the pairings to key sent after we sent the key
+      pairing.state      := R_SENT_KEY;
+      
+      multisetadd (pairing, res[j].pairings)
+    end;
   end;
 end;
 
@@ -377,6 +378,28 @@ ruleset j: ResponderId do
   end;
 end;
 
+startstate
+  -- initialize initiators
+  undefine ini;
+  for i: InitiatorId do
+    ini[i].state      := I_SLEEP;
+    ini[i].responder  := i;
+  end;
+
+  -- initialize responders
+  undefine res;
+  for i: ResponderId do
+    undefine res[i].pairings;
+  end;
+
+  -- initialize intruders
+  undefine int;
+     
+  -- initialize network
+  undefine net;
+end;
+
+-- invariants
 
 invariant "initiator correctly authenticated"
   forall i: ResponderId do
@@ -384,34 +407,3 @@ invariant "initiator correctly authenticated"
     ->
     true
   end;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
