@@ -174,7 +174,7 @@ type
 
     -- Phase 2
     I_WAIT_NONCE,     -- waiting on phase 2 nonce value from non-initiator
-    I_VERIFIED,       -- complete phase 2 exchange and verified
+    I_PHASETWO_DONE,  -- complete phase 2 exchange and verified
     
     -- Phase 3
     I_WAIT_EVALUE,
@@ -199,7 +199,7 @@ type
 
     -- Phase 2
     R_WAIT_NONCE,     -- waiting on phase 2 nonce value from non-initiator
-    R_PHASETWO_DONE,       -- complete phase 2 exchange and verified
+    R_PHASETWO_DONE,  -- complete phase 2 exchange and verified
     
     -- Phase 3
     R_WAIT_EVALUE,
@@ -340,31 +340,41 @@ end;
 -- initiator i reacts to nonce received and checks CValue (step 6a)
 ruleset i: InitiatorId do
   choose j: net do
-    -- Numeric Comparison Rule
-    rule 60 "initiator reacts to nonce recieved and checks CValue (step 6a)"
+    rule 61 "initiator reacts to nonce recieved and checks CValue (step 6a)"
+
       ini[i].state = I_WAIT_NONCE &
       net[j].dest = i &
-      ismember(net[j].source,IntruderId)
+      !ismember(net[j].source, InitiatorId)
+
     ==>
 
     var
-      outM: Message;  -- outgoing message
       inM:  Message;  -- incoming message
+      outM: Message;  -- outgoing message
 
     begin
       inM := net[j];
       multisetremove (j, net);
 
-      if inM.mType = M_Nonce then -- correct message type
-        if inM.source = ini[i].responder then
-          ini[i].responder_nb := inM.nonce;
-          ini[i].state := I_VERIFIED;
+      if inM.mType = M_Nonce & inM.source = ini[i].responder then -- get nb
+        ini[i].responder_nb := inM.nonce;
+
+        -- verification
+        if ini[i].responder_cb.pka = i &
+           ini[i].responder_cb.pkb = ini[i].responder_pkb &
+           ini[i].responder_cb.nb = ini[i].responder_nb then
+          ini[i].state := I_PHASETWO_DONE;
+        else
+          --error "commitment value does not match -- aborted pairing"
         end;
       end;
 
     end;
   end;
 end;
+
+-- Phase 3 =====================================================================
+-- TODO:
 
 --------------------------------------------------------------------------------
 -- behavior of responder
@@ -521,8 +531,10 @@ end;
 -- invariants
 --------------------------------------------------------------------------------
 
-invariant "initiator correctly authenticated"
+-- TODO: Still need to model intruder
+invariant "initiator correctly paired with good responder"
   forall i: InitiatorId do
-    -- TODO: change to !ismember(ini[i].responder, IntruderId) and it will fail
-    true 
+    ini[i].state = I_PHASETWO_DONE 
+    ->
+    !ismember(ini[i].responder, IntruderId)
   end;
