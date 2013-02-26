@@ -127,8 +127,8 @@ const
   MaxInitiators:  7;  -- maximum number of initiators per responder
   NumResponders:  1;  -- number of responders
   NumIntruders:   1;  -- number of intruders
-  NetworkSize:   10;  -- max. number of outstanding messages in network
-  MaxKnowledge:  10;  -- max. number of messages intruder can remember
+  NetworkSize:  100;  -- max. number of outstanding messages in network
+  MaxKnowledge: 100;  -- max. number of messages intruder can remember
 
 -- -----------------------------------------------------------------------------
 type
@@ -721,6 +721,74 @@ ruleset i: IntruderId do
   end;
 end;
 
+-- intruder i modifies messages
+ruleset i: IntruderId do
+  ruleset j: MessageType do
+    ruleset k: AgentId do
+      rule 100 "intruder sends recorded message with its own info"
+
+        !ismember (k, IntruderId) &
+        multisetcount (l:net, true) < NetworkSize
+
+      ==>
+
+      var
+        outM: Message;
+
+        outCValue: CValue;
+        outEValue: EValue;
+
+      begin
+        undefine outM;
+
+        -- deal with different types of messages
+        switch j   -- modify depending on message type
+        case M_PublicKey:
+          outM.mType  := M_PublicKey;
+          outM.source := i;
+          outM.dest   := k;
+          outM.hashed := false;
+          outM.publickey := i;
+        case M_CommitValue:
+          undefine outCValue;
+          outCValue.pka := i;
+          outCValue.pkb := k;
+          outCValue.nb  := k;   -- assume known since sent in clear
+          
+          outM.mType    := M_CommitValue;
+          outM.source   := i;
+          outM.dest     := k;
+          outM.hashed   := true;
+          outM.cValue   := outCValue;
+        case M_Nonce:
+          outM.mType  := M_Nonce;
+          outM.source := i;
+          outM.dest   := k;
+          outM.hashed := false;
+          outM.nonce  := i;
+        case M_ExchangeVerif:
+          undefine outEValue;
+          outEValue.pka := i;
+          outEValue.pkb := k;
+          outEValue.na  := i;
+          outEValue.nb  := k;
+          outEValue.r   := k;
+          outEValue.source  := i;     -- TODO: Probably can delete
+          outEValue.dest    := k;
+
+          outM.mType  := M_ExchangeVerif;
+          outM.source := i;
+          outM.dest   := k;
+          outM.hashed := true;
+          outM.eValue := outEValue;
+        end;
+
+        -- send recorded message with modifications
+        multisetadd (outM, net);
+      end;
+    end;
+  end;
+end;
 
 --------------------------------------------------------------------------------
 -- start state
