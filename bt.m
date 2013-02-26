@@ -187,7 +187,7 @@ type
     
     -- Phase 3
     I_WAIT_EVALUE,
-    I_PHASETHREE_DONE
+    I_PAIRED
   };
   
   Initiator: record
@@ -197,7 +197,7 @@ type
     responder_rb: AgentId;    -- recieved rb value if any
     responder_nb: AgentId;    -- recieved nonce in phase 2
     responder_cb: CValue;     -- received commitment value
-    linkKey:      AgentId;    -- link key of the pairing
+    linkKey:      boolean;    -- link key of the pairing
   end;
   
   ResponderStates: enum {
@@ -210,7 +210,7 @@ type
     R_PHASETWO_DONE,  -- complete phase 2 exchange and verified
     
     -- Phase 3
-    R_PHASETHREE_DONE
+    R_PAIRED
   };
   
   Pairing: record
@@ -220,7 +220,7 @@ type
     initiator_ra:   AgentId;    -- received random value
     initiator_na:   AgentId;    -- recieved nonce in phase 2
     initiator_ca:   CValue;     -- received commitment value
-    linkKey:        AgentId;    -- link key of the pairing
+    linkKey:        boolean;    -- link key of the pairing
   end;
   
   Responder: record
@@ -446,7 +446,8 @@ ruleset i: InitiatorId do
            inM.eValue.source = ini[i].responder &
            inM.eValue.dest   = i then
           -- Verified so can complete phase 3
-          ini[i].state      := I_PHASETHREE_DONE;
+          ini[i].state      := I_PAIRED;
+          ini[i].linkKey    := true;
         else
           --error "(step 11a) exchange verification did not match"
         end;
@@ -498,7 +499,8 @@ ruleset j: ResponderId do
         multisetadd (outM, net);
         
         -- change the pairings to done with phase 1 after we sent the key
-        pairing.state      := R_PHASEONE_DONE;
+        pairing.state       := R_PHASEONE_DONE;
+        pairing.linkKey     := false;
         
         multisetadd (pairing, res[j].pairings);
       end;
@@ -640,7 +642,8 @@ ruleset j: ResponderId do
             multisetadd (outM, net);
             
             -- Update state to be done with phase 3
-            res[j].pairings[i].state := R_PHASETHREE_DONE;
+            res[j].pairings[i].state      := R_PAIRED;
+            res[j].pairings[i].linkKey    := true;
           else
             --error "(step 10b) exchange verification did not match"
           end;
@@ -803,6 +806,7 @@ startstate
   for i: InitiatorId do
     ini[i].state      := I_SLEEP;
     ini[i].responder  := i;
+    ini[i].linkKey    := false;
   end;
 
   -- initialize responders
@@ -831,7 +835,7 @@ end;
 -- initiator authenticity
 invariant "initiator correctly paired with good responder"
   forall i: InitiatorId do
-    ini[i].state = I_PHASETHREE_DONE 
+    ini[i].state = I_PAIRED 
     ->
     !ismember(ini[i].responder, IntruderId)
   end;
@@ -840,7 +844,7 @@ invariant "initiator correctly paired with good responder"
 invariant "responders correctly paired with good initiator"
   forall i: ResponderId do
     multisetcount(l:res[i].pairings, 
-                  (res[i].pairings[l].state = R_PHASETHREE_DONE &
+                  (res[i].pairings[l].state = R_PAIRED &
                    ismember(res[i].pairings[l].initiator,
                                IntruderId))) = 0
   end;
@@ -848,7 +852,8 @@ invariant "responders correctly paired with good initiator"
 -- initiator secrecy
 invariant "initiator link key is secret"
   forall i: InitiatorId do
-    ini[i].state = I_PHASETHREE_DONE 
+    ini[i].state = I_PAIRED &
+    ini[i].linkKey = true
     ->
     forall j: IntruderId do
       int[j].linkKeys[i] = false
@@ -861,7 +866,8 @@ invariant "responder link key is secret"
     forall i: ResponderId do
       multisetcount(l:res[i].pairings, 
                     (res[i].pairings[l].initiator = j & 
-                     res[i].pairings[l].state = R_PHASETHREE_DONE & 
+                     res[i].pairings[l].state = R_PAIRED & 
+                     res[i].pairings[l].linkKey = true & 
                      int[j].linkKeys[i] = true)) = 0
     end
   end;
