@@ -155,7 +155,7 @@ type
     source: AgentId;  -- address of who is sending
     dest:   AgentId;  -- address of who is receiving
   end;
-  
+
   MessageType : enum {    -- different types of messages
     M_PublicKey,          -- phase 1: Public Key Exchange - PKa/PKb
     M_CommitValue,        -- phase 2: Authentication Stage 1 - Ca/Cb
@@ -197,6 +197,7 @@ type
     responder_rb: AgentId;    -- recieved rb value if any
     responder_nb: AgentId;    -- recieved nonce in phase 2
     responder_cb: CValue;     -- received commitment value
+    linkKey:      AgentId;    -- link key of the pairing
   end;
   
   ResponderStates: enum {
@@ -219,6 +220,7 @@ type
     initiator_ra:   AgentId;    -- received random value
     initiator_na:   AgentId;    -- recieved nonce in phase 2
     initiator_ca:   CValue;     -- received commitment value
+    linkKey:        AgentId;    -- link key of the pairing
   end;
   
   Responder: record
@@ -227,6 +229,7 @@ type
   
   Intruder: record 
     messages: multiset[MaxKnowledge] of Message;
+    linkKeys: array[AgentId] of boolean;
   end;
   
 -- -----------------------------------------------------------------------------
@@ -810,6 +813,12 @@ startstate
 
   -- initialize intruders
   undefine int;
+  for i: IntruderId do
+    for j: AgentId do
+      int[i].linkKeys[j] := false;
+    end;
+    int[i].linkKeys[i] := true;
+  end;
      
   -- initialize network
   undefine net;
@@ -819,10 +828,42 @@ end;
 -- invariants
 --------------------------------------------------------------------------------
 
--- TODO: Still need to model intruder
+-- initiator authenticity
 invariant "initiator correctly paired with good responder"
   forall i: InitiatorId do
     ini[i].state = I_PHASETHREE_DONE 
     ->
     !ismember(ini[i].responder, IntruderId)
   end;
+
+-- responder authenticity
+invariant "responders correctly paired with good initiator"
+  forall i: ResponderId do
+    multisetcount(l:res[i].pairings, 
+                  (res[i].pairings[l].state = R_PHASETHREE_DONE &
+                   ismember(res[i].pairings[l].initiator,
+                               IntruderId))) = 0
+  end;
+
+-- initiator secrecy
+invariant "initiator link key is secret"
+  forall i: InitiatorId do
+    ini[i].state = I_PHASETHREE_DONE 
+    ->
+    forall j: IntruderId do
+      int[j].linkKeys[i] = false
+    end
+  end;
+
+-- responder secrecy
+invariant "responder link key is secret"
+  forall j: IntruderId do
+    forall i: ResponderId do
+      multisetcount(l:res[i].pairings, 
+                    (res[i].pairings[l].initiator = j & 
+                     res[i].pairings[l].state = R_PHASETHREE_DONE & 
+                     int[j].linkKeys[i] = true)) = 0
+    end
+  end;
+
+
