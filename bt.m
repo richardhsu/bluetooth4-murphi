@@ -173,8 +173,6 @@ type
     publickey:  AgentId;      -- public key
     cValue:     CValue;       -- commit value (Phase 2)
     eValue:     EValue;       -- exchange verification value (Phase 3)
-    addrMaster: AgentId;      -- The address of the initiator of the pairing
-    addrSlave:  AgentId;      -- The address of the non-initiator
   end;
 
   InitiatorStates: enum {
@@ -648,6 +646,81 @@ ruleset j: ResponderId do
     end;
   end;
 end;
+
+--------------------------------------------------------------------------------
+-- behavior of intruder
+
+-- intruder i intercepts messages
+ruleset i: IntruderId do
+  choose k: net do
+    rule 10 "intruder intercepts messages"
+
+      !ismember (net[k].source, IntruderId)
+
+    ==>
+  
+    var
+      temp: Message;
+
+    begin
+      alias msg: net[k] do  -- message to intercept
+        alias messages: int[i].messages do
+          temp := msg;
+          undefine temp.source;   -- delete as useless can change later
+          undefine temp.dest;     -- can change later
+          if multisetcount (l:messages,
+                messages[l].mType  = temp.mType &
+                messages[l].hashed = temp.hashed &
+                (messages[l].mType = M_PublicKey ->
+                 messages[l].publickey = temp.publickey) & 
+                (messages[l].mType = M_Nonce ->
+                 messages[l].nonce = temp.nonce) &
+                (messages[l].mType = M_CommitValue ->
+                 messages[l].cValue.pka = temp.cValue.pka &
+                 messages[l].cValue.pkb = temp.cValue.pkb &
+                 messages[l].cValue.nb  = temp.cValue.nb) &
+                (messages[l].mType = M_ExchangeVerif ->
+                 messages[l].eValue.pka = temp.eValue.pka &
+                 messages[l].eValue.pkb = temp.eValue.pkb &
+                 messages[l].eValue.na  = temp.eValue.na &
+                 messages[l].eValue.nb  = temp.eValue.nb &
+                 messages[l].eValue.r   = temp.eValue.r &
+                 messages[l].eValue.source = temp.eValue.source &
+                 messages[l].eValue.dest   = temp.eValue.dest)) = 0 then
+            -- If not exist then add to messages
+            multisetadd (temp, int[i].messages);
+          end;
+        end;
+      end;
+      multisetremove (k, net);
+    end;
+  end;
+end;
+
+-- intruder i sends recorded message
+ruleset i: IntruderId do
+  choose j: int[i].messages do
+    ruleset k: AgentId do
+      rule 90 "intruder sends recorded message"
+
+        !ismember (k, IntruderId) &
+        multisetcount (l:net, true) < NetworkSize
+
+      ==>
+
+      var
+        outM: Message;
+
+      begin
+        outM        := int[i].messages[j];
+        outM.source := i;
+        outM.dest   := k;
+        multisetadd (outM, net);
+      end;
+    end;
+  end;
+end;
+
 
 --------------------------------------------------------------------------------
 -- start state
