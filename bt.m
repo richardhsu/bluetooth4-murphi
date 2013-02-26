@@ -754,7 +754,7 @@ end;
 -- TODO: Still need to model intruder
 invariant "initiator correctly paired with good responder"
   forall i: InitiatorId do
-    ini[i].state = I_PHASETWO_DONE 
+    ini[i].state = I_PHASETHREE_DONE 
     ->
     !ismember(ini[i].responder, IntruderId)
   end;
