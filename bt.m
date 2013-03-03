@@ -306,6 +306,7 @@ ruleset i: InitiatorId do
   choose k: net do
     rule 97 "initiator reacts to commit value received and sends nonce (step 5)"
 
+      (PHASETWO = 1 | PHASETWO = 2) &
       ini[i].state = I_PHASEONE_DONE &
       net[k].dest = i -- only deal with messages to me 
 
@@ -346,6 +347,7 @@ ruleset i: InitiatorId do
   choose k: net do
     rule 96 "initiator reacts to nonce recieved and checks CValue (step 6a)"
 
+      (PHASETWO = 1 | PHASETWO = 2) &
       ini[i].state = I_WAIT_NONCE &
       net[k].dest = i    -- only deal with messages to me
 
@@ -507,6 +509,7 @@ ruleset j: ResponderId do
   choose i: res[j].pairings do
     rule 98 "responder sends commitment value to initiator (step 4)"
       
+      (PHASETWO = 1 | PHASETWO = 2) &
       res[j].pairings[i].state = R_PHASEONE_DONE &
       multisetcount (l:net, true) < NetworkSize
     
@@ -542,6 +545,7 @@ ruleset j: ResponderId do
     choose i: res[j].pairings do
       rule 97 "responder gets nonce from and sends nonce to initiator (step 6)"
         
+        (PHASETWO = 1 | PHASETWO = 2) &
         res[j].pairings[i].state = R_WAIT_NONCE &
         net[k].source = res[j].pairings[i].initiator &
         net[k].dest = j &
