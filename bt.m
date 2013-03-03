@@ -247,7 +247,7 @@ var
 -- initiator i starts protocol with responder or intruder j (step 1a)
 ruleset i: InitiatorId do
   ruleset j: AgentId do
-    rule 10 "initiator starts protocol (step 1a)"
+    rule 99 "initiator starts protocol (step 1a)"
       
       ini[i].state = I_SLEEP &
       !ismember(j, InitiatorId) &
@@ -276,7 +276,7 @@ end;
 -- initiator i reacts to public key from responder or intruder (step 1b done)
 ruleset i: InitiatorId do
   choose k: net do
-    rule 12 "initiator reacts to public key response (step 1b done)"
+    rule 98 "initiator reacts to public key response (step 1b done)"
       
       ini[i].state = I_SENT_KEY &
       net[k].dest = i -- only deal with messages to me
@@ -304,7 +304,7 @@ end;
 -- initiator i reacts to commit value from responder and sends nonce (step 5)
 ruleset i: InitiatorId do
   choose k: net do
-    rule 50 "initiator reacts to commit value received and sends nonce (step 5)"
+    rule 97 "initiator reacts to commit value received and sends nonce (step 5)"
 
       ini[i].state = I_PHASEONE_DONE &
       net[k].dest = i -- only deal with messages to me 
@@ -344,7 +344,7 @@ end;
 -- initiator i reacts to nonce received and checks CValue (step 6a)
 ruleset i: InitiatorId do
   choose k: net do
-    rule 61 "initiator reacts to nonce recieved and checks CValue (step 6a)"
+    rule 96 "initiator reacts to nonce recieved and checks CValue (step 6a)"
 
       ini[i].state = I_WAIT_NONCE &
       net[k].dest = i    -- only deal with messages to me
@@ -383,7 +383,7 @@ end;
 -- Phase 3 =====================================================================
 -- initiator i initiates the exchange verification stage (step 10)
 ruleset i: InitiatorId do
-  rule 10 "initiator initiates the exchange verification (step 10)"
+  rule 95 "initiator initiates the exchange verification (step 10)"
     
     ini[i].state = I_PHASETWO_DONE &
     multisetcount(l: net, true) < NetworkSize
@@ -418,7 +418,7 @@ end;
 -- initiator i checks the exchange verification value (step 11a)
 ruleset i: InitiatorId do
   choose k: net do
-    rule 111 "initiator checks the exchange verification value (step 11a)"
+    rule 94 "initiator checks the exchange verification value (step 11a)"
       
       ini[i].state = I_WAIT_EVALUE &
       net[k].dest = i 
@@ -458,7 +458,7 @@ end;
 -- responder j reacts to public key from initiator or intruder i (step 1b)
 ruleset j: ResponderId do
   choose k: net do
-    rule 11 "responder reacts to public key and sends back pkb (step 1b)"
+    rule 99 "responder reacts to public key and sends back pkb (step 1b)"
       
       net[k].dest = j & -- make sure to me
       multisetcount (l:res[j].pairings, 
@@ -505,7 +505,7 @@ end;
 -- responder j computes commitment and sends to initiator i (step 4)
 ruleset j: ResponderId do
   choose i: res[j].pairings do
-    rule 40 "responder sends commitment value to initiator (step 4)"
+    rule 98 "responder sends commitment value to initiator (step 4)"
       
       res[j].pairings[i].state = R_PHASEONE_DONE &
       multisetcount (l:net, true) < NetworkSize
@@ -540,7 +540,7 @@ end;
 ruleset j: ResponderId do
   choose k: net do
     choose i: res[j].pairings do
-      rule 60 "responder gets nonce from and sends nonce to initiator (step 6)"
+      rule 97 "responder gets nonce from and sends nonce to initiator (step 6)"
         
         res[j].pairings[i].state = R_WAIT_NONCE &
         net[k].source = res[j].pairings[i].initiator &
@@ -581,7 +581,7 @@ end;
 ruleset j: ResponderId do
   choose k: net do
     choose i: res[j].pairings do
-      rule 102 "responder responds to exchange verification (step 10b/11)"
+      rule 96 "responder responds to exchange verification (step 10b/11)"
         
         net[k].dest = j &
         res[j].pairings[i].state = R_PHASETWO_DONE &
@@ -646,7 +646,7 @@ end;
 -- intruder i intercepts messages
 ruleset i: IntruderId do
   choose k: net do
-    rule 10 "intruder intercepts messages"
+    rule 100 "intruder intercepts messages"
 
       !ismember (net[k].source, IntruderId)
 
@@ -691,9 +691,10 @@ end;
 ruleset i: IntruderId do
   choose j: int[i].messages do
     ruleset k: AgentId do
-      rule 90 "intruder sends recorded message"
+      rule 100 "intruder sends recorded message"
 
         !ismember (k, IntruderId) &
+        !(int[i].messages[j].source = k) &
         multisetcount (l:net, true) < NetworkSize
 
       ==>
@@ -716,7 +717,7 @@ end;
 ruleset i: IntruderId do
   choose j: int[i].messages do
     ruleset k: AgentId do
-      rule 90 "intruder sends recorded message with its own info"
+      rule 100 "intruder sends recorded message with its own info"
 
         !ismember (k, IntruderId) &
         !(int[i].messages[j].source = k) &
