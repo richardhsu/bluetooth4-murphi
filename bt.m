@@ -205,7 +205,7 @@ type
     responder_n:  AgentId;    -- recieved nonce in phase 2
     responder_c:  CValue;     -- received commitment value
     linkKey:      boolean;    -- link key of the pairing
-    vvalue:       VValue;     -- verification token generated NC Phase 3
+    vValue:       VValue;     -- verification token generated NC Phase 3
   end;
   
   ResponderStates: enum {
@@ -230,7 +230,7 @@ type
     initiator_n:    AgentId;    -- recieved nonce in phase 2
     initiator_c:    CValue;     -- received commitment value
     linkKey:        boolean;    -- link key of the pairing
-    vvalue:         VValue;     -- verification token generated NC Phase 3
+    vValue:         VValue;     -- vvalue of the pairing
   end;
 
   -- Keep track of pairings for verification
@@ -246,7 +246,6 @@ type
   Intruder: record 
     messages: multiset[MaxKnowledge] of Message;
     linkKeys: array[AgentId] of boolean;
-    vvalue:   VValue;     -- verification token generated NC Phase 3
   end;
   
 -- -----------------------------------------------------------------------------
@@ -256,6 +255,7 @@ var
   res: array[ResponderId] of Responder;          -- responders
   int: array[IntruderId] of Intruder;            -- intruders
   gpr: multiset[MaxPairings] of GlobalPairing; -- pairings
+
 --------------------------------------------------------------------------------
 -- rules
 --------------------------------------------------------------------------------
@@ -413,7 +413,7 @@ ruleset i: InitiatorId do
               newVValue.n_initiator  := i;
               newVValue.n_responder  := ini[i].responder_n;
 
-              ini[i].vvalue := newVValue;
+              ini[i].vValue := newVValue;
               ini[i].state := I_NC_VERIF_SET;
             end;
           else
@@ -629,7 +629,8 @@ ruleset j: ResponderId do
             newVValue.n_initiator  := res[j].pairings[i].initiator;
             newVValue.n_responder  := j;
 
-            res[j].pairings[i].vvalue := newVValue;
+            -- set vvalue in correspondance with initiator
+            res[j].pairings[i].vValue := newVValue;
             res[j].pairings[i].state  := R_NC_VERIF_SET;
           end;
         end;
@@ -703,6 +704,9 @@ ruleset j: ResponderId do
 end;
 
 --------------------------------------------------------------------------------
+-- behavior of global pairing
+
+--------------------------------------------------------------------------------
 -- behavior of intruder
 
 -- intruder i intercepts messages
@@ -721,6 +725,7 @@ ruleset i: IntruderId do
       alias msg: net[k] do  -- message to intercept
         alias messages: int[i].messages do
           temp := msg;
+
           undefine temp.source;   -- delete as useless can change later
           undefine temp.dest;     -- can change later
           if multisetcount (l:messages,
@@ -862,7 +867,7 @@ startstate
   undefine int;
   for i: IntruderId do
     for j: AgentId do
-      int[i].linkKeys[j] := false;
+      int[i].linkKeys[j]  := false;
     end;
     int[i].linkKeys[i] := true;
   end;
