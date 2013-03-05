@@ -232,7 +232,7 @@ type
     linkKey:        boolean;    -- link key of the pairing
     vValue:         VValue;     -- vvalue of the pairing
   end;
-
+  
   -- Keep track of pairings for verification
   GlobalPairing: record
     initiator:  AgentId;
@@ -254,8 +254,8 @@ var
   ini: array[InitiatorId] of Initiator;          -- initiators
   res: array[ResponderId] of Responder;          -- responders
   int: array[IntruderId] of Intruder;            -- intruders
-  gpr: multiset[MaxPairings] of GlobalPairing; -- pairings
-
+  gpr: multiset[MaxPairings] of GlobalPairing;   -- pairings
+  
 --------------------------------------------------------------------------------
 -- rules
 --------------------------------------------------------------------------------
@@ -294,7 +294,7 @@ ruleset i: InitiatorId do
       undefine gpairing;
       gpairing.initiator  := i;
       gpairing.responder  := j;
-
+      
       multisetadd (gpairing, gpr);
     end;
   end;
@@ -919,5 +919,35 @@ invariant "responder link key is secret"
                      int[j].linkKeys[i] = true)) = 0
     end
   end;
+
+
+-- initiator honest pairing
+-- every initiator device is paired with who the device originally thought it would be paired with
+invariant "initiator honest pairing"
+  forall i: InitiatorId do
+    multisetcount(l:gpr,
+                (gpr[l].initiator = i &
+                gpr[l].responder = ini[i].responder)) >= 1
+  end;
+
+
+-- responder honest pairing
+-- every responder device is paired with who the device originally thought it would be paired with
+invariant "responder honest pairing"
+  forall i: ResponderId do
+    forall j: res[i].pairings do
+      multisetcount(l:gpr,
+                  (gpr[l].initiator = res[i].pairings[j].initiator &
+                  gpr[l].responder = i)) >= 1
+    end
+  end;
+
+
+
+
+
+
+
+
 
 
