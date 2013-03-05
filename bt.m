@@ -121,7 +121,7 @@
 
 -- -----------------------------------------------------------------------------
 const
-  PHASETWO:       1;  -- SSP Phase 2 Protocol (1: JW | 2: NC | 3: PE | 4: OOB)
+  PHASETWO:       2;  -- SSP Phase 2 Protocol (1: JW | 2: NC | 3: PE | 4: OOB)
 
   NumInitiators:  1;  -- number of initiators
   MaxInitiators:  1;  -- maximum number of initiators per responder
@@ -246,6 +246,7 @@ type
   Intruder: record 
     messages: multiset[MaxKnowledge] of Message;
     linkKeys: array[AgentId] of boolean;
+    vValues:  array[AgentId] of VValue;
   end;
   
 -- -----------------------------------------------------------------------------
@@ -706,6 +707,57 @@ end;
 --------------------------------------------------------------------------------
 -- behavior of global pairing
 
+-- responder and initiator have global pairing so verify
+ruleset r: ResponderId do
+  choose k: res[r].pairings do
+    ruleset i: InitiatorId do
+      rule 99 "responder and initiator check verification"
+
+        multisetcount(g:gpr, gpr[g].initiator = i & 
+                             gpr[g].responder = r) >= 1 &
+        ini[i].state = I_NC_VERIF_SET &
+        res[r].pairings[k].state = R_NC_VERIF_SET &
+        res[r].pairings[k].initiator = i 
+
+      ==>
+
+      begin
+        -- verify that the verification codes are same
+        alias r_vValue: res[r].pairings[k].vValue do
+          alias i_vValue: ini[i].vValue do
+            if (r_vValue.pk_initiator = i_vValue.pk_initiator &
+                r_vValue.pk_responder = i_vValue.pk_responder &
+                r_vValue.n_initiator = i_vValue.n_initiator &
+                r_vValue.n_responder = i_vValue.n_responder) then
+              -- verified so move forward
+              res[r].pairings[k].state := R_PHASETWO_DONE;
+              ini[i].state := I_PHASETWO_DONE;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+end;
+
+-- intruder and initiator have global pairing so 'verification' occurs
+ruleset a: IntruderId do
+  ruleset i: InitiatorId do
+    rule 90 "initiator and intruder check verification"
+      
+      multisetcount(g:gpr, gpr[g].initiator = i &
+                           gpr[g].responder = a) >= 1 &
+      ini[i].state = I_NC_VERIF_SET
+
+    ==>
+    begin
+      -- because initiating with intruder already then verification
+      -- will occur naturally
+      ini[i].state := I_PHASETWO_DONE;
+    end;
+  end;
+end;
+
 --------------------------------------------------------------------------------
 -- behavior of intruder
 
@@ -726,10 +778,10 @@ ruleset i: IntruderId do
         alias messages: int[i].messages do
           temp := msg;
 
-          undefine temp.source;   -- delete as useless can change later
-          undefine temp.dest;     -- can change later
           if multisetcount (l:messages,
                 messages[l].mType  = temp.mType &
+                messages[l].source = temp.source &
+                messages[l].dest   = temp.dest &
                 (messages[l].mType = M_PublicKey ->
                  messages[l].publickey = temp.publickey) & 
                 (messages[l].mType = M_Nonce ->
@@ -746,6 +798,7 @@ ruleset i: IntruderId do
                  messages[l].eValue.r_recv   = temp.eValue.r_recv)) = 0 then
             -- If not exist then add to messages
             multisetadd (temp, int[i].messages);
+
           end;
         end;
       end;
@@ -922,24 +975,33 @@ invariant "responder link key is secret"
 
 
 -- initiator honest pairing
--- every initiator device is paired with who the device originally thought it would be paired with
+-- every initiator device is paired with who the device originally thought it 
+-- would be paired with
 invariant "initiator honest pairing"
   forall i: InitiatorId do
+    ini[i].state = I_PAIRED &
+    ini[i].linkKey = true
+    ->
     multisetcount(l:gpr,
-                (gpr[l].initiator = i &
-                gpr[l].responder = ini[i].responder)) >= 1
+                  (gpr[l].initiator = i &
+                   gpr[l].responder = ini[i].responder)) >= 1
   end;
 
 
 -- responder honest pairing
--- every responder device is paired with who the device originally thought it would be paired with
+-- every responder device is paired with who the device originally thought it 
+-- would be paired with
 invariant "responder honest pairing"
   forall i: ResponderId do
-    forall j: res[i].pairings do
-      multisetcount(l:gpr,
-                  (gpr[l].initiator = res[i].pairings[j].initiator &
-                  gpr[l].responder = i)) >= 1
-    end
+    multisetcount(j:res[i].pairings,
+                  res[i].pairings[j].state = R_PAIRED) >= 1
+    ->
+    multisetcount(l:gpr,
+      (multisetcount(j:res[i].pairings,
+       res[i].pairings[j].state = R_PAIRED &
+       gpr[l].responder = i &
+       res[i].pairings[j].initiator = gpr[l].initiator) >= 1)
+    ) >= 1
   end;
 
 
