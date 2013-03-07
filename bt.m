@@ -123,8 +123,8 @@
 const
   PHASETWO:       2;  -- SSP Phase 2 Protocol (1: JW | 2: NC | 3: PE | 4: OOB)
 
-  NumInitiators:  1;  -- number of initiators
-  MaxInitiators:  1;  -- maximum number of initiators per responder
+  NumInitiators:  2;  -- number of initiators
+  MaxInitiators:  2;  -- maximum number of initiators per responder
   NumResponders:  1;  -- number of responders
   NumIntruders:   1;  -- number of intruders
   NetworkSize:   10;  -- max number of outstanding messages in network
@@ -518,6 +518,7 @@ ruleset j: ResponderId do
       pairing: Pairing;
       inM: Message;
       outM: Message;
+      gpairing: GlobalPairing;
     
     begin
       inM := net[k];
@@ -537,6 +538,20 @@ ruleset j: ResponderId do
         outM.publickey    := j;                   -- responder public key
         
         multisetadd (outM, net);
+
+        -- Here we're saying send the public key so pretend to initiate a
+        -- a connection
+        -- Don't set up if we are actually doing a responding PublicKey
+        -- Or if we've already set up the pairing
+        if (multisetcount (g:gpr, 
+                           (gpr[g].initiator = pairing.initiator & 
+                            gpr[g].responder = j)) = 0) then
+          undefine gpairing;
+          gpairing.initiator  := pairing.initiator;
+          gpairing.responder  := j;
+          
+          multisetadd (gpairing, gpr);
+        end;
         
         -- change the pairings to done with phase 1 after we sent the key
         pairing.state       := R_PHASEONE_DONE;
@@ -751,9 +766,31 @@ ruleset a: IntruderId do
 
     ==>
     begin
+      -- TODO Actually make some boolean conditions on what is known etc.
       -- because initiating with intruder already then verification
       -- will occur naturally
       ini[i].state := I_PHASETWO_DONE;
+    end;
+  end;
+end;
+
+-- intruder and responder have global pairing so 'verification' occurs
+ruleset a: IntruderId do
+  ruleset r: ResponderId do
+    choose k: res[r].pairings do
+      rule 90 "responder and intruder check verification"
+        
+        multisetcount(g:gpr, gpr[g].initiator = a &
+                             gpr[g].responder = r) >= 1 &
+        res[r].pairings[k].state = R_NC_VERIF_SET
+
+      ==>
+      begin
+        -- TODO Actually make some boolean conditions on what is known etc.
+        -- because initiating with intruder already then verification
+        -- will occur naturally
+        res[r].pairings[k].state := R_PHASETWO_DONE;
+      end;
     end;
   end;
 end;
