@@ -636,7 +636,6 @@ ruleset j: ResponderId do
         
         (PHASETWO = 1 | PHASETWO = 2) &
         res[j].pairings[i].state = R_WAIT_NONCE &
-        net[k].source = res[j].pairings[i].initiator &
         net[k].dest = j &
         multisetcount (l:net, true) <= NetworkSize
       
@@ -670,9 +669,9 @@ ruleset j: ResponderId do
           if PHASETWO = 2 then -- Numeric Comparison
             -- Set the verification calculation
             undefine newVValue;
-            newVValue.pk_initiator := res[j].pairings[i].initiator;
+            newVValue.pk_initiator := res[j].pairings[i].initiator_pk;
             newVValue.pk_responder := j;
-            newVValue.n_initiator  := res[j].pairings[i].initiator;
+            newVValue.n_initiator  := res[j].pairings[i].initiator_pk;
             newVValue.n_responder  := j;
 
             -- set vvalue in correspondance with initiator
@@ -694,7 +693,6 @@ ruleset j: ResponderId do
         
         net[k].dest = j &
         res[j].pairings[i].state = R_PHASETWO_DONE &
-        net[k].source = res[j].pairings[i].initiator &
         multisetcount(l: net, true) <= NetworkSize
         
       ==>
@@ -766,13 +764,12 @@ end;
 ruleset r: ResponderId do
   choose k: res[r].pairings do
     ruleset i: InitiatorId do
-      rule 99 "responder and initiator check verification"
+      rule 90 "responder and initiator check verification"
 
-        multisetcount(g:gpr, gpr[g].initiator = i & 
-                             gpr[g].responder = r) >= 1 &
+        (multisetcount(g:gpr, gpr[g].initiator = i & 
+                             gpr[g].responder = r) > 0) &
         ini[i].state = I_NC_VERIF_SET &
-        res[r].pairings[k].state = R_NC_VERIF_SET &
-        res[r].pairings[k].initiator = i 
+        res[r].pairings[k].state = R_NC_VERIF_SET 
 
       ==>
 
@@ -820,7 +817,7 @@ end;
 ruleset a: IntruderId do
   ruleset r: ResponderId do
     choose k: res[r].pairings do
-      rule 90 "responder and intruder check verification"
+      rule 99 "responder and intruder check verification"
         
         multisetcount(g:gpr, gpr[g].initiator = a &
                              gpr[g].responder = r) >= 1 &
@@ -845,7 +842,7 @@ end;
 -- intruder i intercepts messages
 ruleset i: IntruderId do
   choose k: net do
-    rule 10 "intruder intercepts messages"
+    rule 98 "intruder intercepts messages"
 
       !ismember (net[k].source, IntruderId)
 
@@ -899,7 +896,7 @@ end;
 ruleset i: IntruderId do
   choose j: int[i].messages do
     ruleset k: AgentId do
-      rule 100 "intruder sends recorded message"
+      rule 98 "intruder sends recorded message"
 
         !ismember (k, IntruderId) &
         !(int[i].messages[j].source = k) &
@@ -925,7 +922,7 @@ end;
 ruleset i: IntruderId do
   choose j: int[i].messages do
     ruleset k: AgentId do
-      rule 100 "intruder sends recorded message with its own info"
+      rule 98 "intruder sends recorded message with its own info"
 
         !ismember (k, IntruderId) &
         !(int[i].messages[j].source = k) &
@@ -1099,8 +1096,6 @@ invariant "responder honest pairing"
        res[i].pairings[j].initiator = gpr[l].initiator) >= 1)
     ) >= 1
   end;
-
-
 
 
 
