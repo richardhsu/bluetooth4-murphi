@@ -15,3 +15,19 @@ Some Tasks to Remember
 ======================
 
 * Add some table to run through increasing numbers and seeing failures/states.
+
+Attack and Rules
+================
+
+Just Works
+----------
+
+* Require that the intruder intercepts be set to 10.
+* Use regular rules for everything else.
+
+Numeric Comparison
+------------------
+
+* With Any Responder: intruder intercept set to 10 and all other regular rules.
+
+
