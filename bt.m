@@ -121,10 +121,11 @@
 
 -- -----------------------------------------------------------------------------
 const
-  PHASETWO:       2;  -- SSP Phase 2 Protocol (1: JW | 2: NC | 3: PE | 4: OOB)
+  PHASETWO:       1;  -- SSP Phase 2 Protocol (1: JW | 2: NC | 3: PE | 4: OOB)
+  ASSUMEVALIDRESPONDER:   true;  -- Could be impersonating device
 
-  NumInitiators:  2;  -- number of initiators
-  MaxInitiators:  2;  -- maximum number of initiators per responder
+  NumInitiators:  1;  -- number of initiators
+  MaxInitiators:  1;  -- maximum number of initiators per responder
   NumResponders:  1;  -- number of responders
   NumIntruders:   1;  -- number of intruders
   NetworkSize:   10;  -- max number of outstanding messages in network
@@ -272,7 +273,7 @@ ruleset i: InitiatorId do
       
       ini[i].state = I_SLEEP &
       !ismember(j, InitiatorId) &
-      multisetcount(l: net, true) < NetworkSize
+      multisetcount(l: net, true) < NetworkSize 
       
     ==>
       
@@ -281,22 +282,44 @@ ruleset i: InitiatorId do
       gpairing: GlobalPairing;
 
     begin
-      undefine outM;
-      outM.mType        := M_PublicKey;
-      outM.source       := i;
-      outM.dest         := j;   -- send to responder or intruder
-      outM.publickey    := i;   -- attach public key of initiator
-      
-      multisetadd (outM, net);
-      
-      ini[i].state      := I_SENT_KEY;
-      ini[i].responder  := j;
+      -- ASSUMEVALIDRESPONDER implies only responders can be initiated with
+      if ismember(j, ResponderId) then
+        undefine outM;
+        outM.mType        := M_PublicKey;
+        outM.source       := i;
+        outM.dest         := j;   -- send to responder or intruder
+        outM.publickey    := i;   -- attach public key of initiator
+        
+        multisetadd (outM, net);
+        
+        ini[i].state      := I_SENT_KEY;
+        ini[i].responder  := j;
 
-      undefine gpairing;
-      gpairing.initiator  := i;
-      gpairing.responder  := j;
-      
-      multisetadd (gpairing, gpr);
+        undefine gpairing;
+        gpairing.initiator  := i;
+        gpairing.responder  := j;
+        
+        multisetadd (gpairing, gpr);
+      else
+        if (!ASSUMEVALIDRESPONDER) then
+          undefine outM;
+          outM.mType        := M_PublicKey;
+          outM.source       := i;
+          outM.dest         := j;   -- send to responder or intruder
+          outM.publickey    := i;   -- attach public key of initiator
+          
+          multisetadd (outM, net);
+          
+          ini[i].state      := I_SENT_KEY;
+          ini[i].responder  := j;
+
+          undefine gpairing;
+          gpairing.initiator  := i;
+          gpairing.responder  := j;
+          
+          multisetadd (gpairing, gpr);
+        end;
+      end;
     end;
   end;
 end;
@@ -318,11 +341,9 @@ ruleset i: InitiatorId do
       inM := net[k];
       multisetremove (k, net);  -- remove message from network
 
-      if inM.source = ini[i].responder then   -- must be from responder
-        if inM.mType = M_PublicKey then
-          ini[i].responder_pk  := inM.publickey;
-          ini[i].state         := I_PHASEONE_DONE;
-        end;
+      if inM.mType = M_PublicKey then
+        ini[i].responder_pk  := inM.publickey;
+        ini[i].state         := I_PHASEONE_DONE;
       end;
     end;
   end;
@@ -348,23 +369,21 @@ ruleset i: InitiatorId do
       inM := net[k];
       multisetremove (k, net);  -- remove message from network
 
-      if inM.source = ini[i].responder then -- must be from responder
-        if inM.mType = M_CommitValue then -- correct message type
-          ini[i].responder_c := inM.cValue;  -- store cb information
+      if inM.mType = M_CommitValue then -- correct message type
+        ini[i].responder_c := inM.cValue;  -- store cb information
 
-          -- send nonce to responder
-          undefine outM;
-          outM.mType        := M_Nonce;
-          outM.source       := i;
-          outM.dest         := ini[i].responder;
-          outM.nonce        := i;   -- send my nonce over
+        -- send nonce to responder
+        undefine outM;
+        outM.mType        := M_Nonce;
+        outM.source       := i;
+        outM.dest         := ini[i].responder;
+        outM.nonce        := i;   -- send my nonce over
 
-          multisetadd (outM, net);
+        multisetadd (outM, net);
 
-          ini[i].state := I_WAIT_NONCE;
-          -- ra = rb = 0 in protocol we'll use their IDs to model who sent it
-          ini[i].responder_r := ini[i].responder;
-        end;
+        ini[i].state := I_WAIT_NONCE;
+        -- ra = rb = 0 in protocol we'll use their IDs to model who sent it
+        ini[i].responder_r := ini[i].responder;
       end;
     end;
   end;
@@ -390,36 +409,34 @@ ruleset i: InitiatorId do
       inM := net[k];
       multisetremove (k, net);  -- remove message from network
 
-      if inM.source = ini[i].responder then -- must be from responder
-        if inM.mType = M_Nonce then -- get nonce from responder
-          ini[i].responder_n := inM.nonce;
+      if inM.mType = M_Nonce then -- get nonce from responder
+        ini[i].responder_n := inM.nonce;
 
-          -- verification of c value
-          -- always construct so that:
-          --  send is whoever sent the packet
-          --  recv is whoever receives the packet
-          if ini[i].responder_c.pk_send = ini[i].responder_pk &
-             ini[i].responder_c.pk_recv = i &
-             ini[i].responder_c.n_send = ini[i].responder_n then
-            
-            if PHASETWO = 1 then -- Just Works
-              ini[i].state := I_PHASETWO_DONE;
-            end;
-
-            if PHASETWO = 2 then -- Numeric Comparison
-              -- Set the verification calculation
-              undefine newVValue;
-              newVValue.pk_initiator := i;
-              newVValue.pk_responder := ini[i].responder;
-              newVValue.n_initiator  := i;
-              newVValue.n_responder  := ini[i].responder_n;
-
-              ini[i].vValue := newVValue;
-              ini[i].state := I_NC_VERIF_SET;
-            end;
-          else
-            --error "commitment value does not match -- aborted pairing"
+        -- verification of c value
+        -- always construct so that:
+        --  send is whoever sent the packet
+        --  recv is whoever receives the packet
+        if ini[i].responder_c.pk_send = ini[i].responder_pk &
+           ini[i].responder_c.pk_recv = i &
+           ini[i].responder_c.n_send = ini[i].responder_n then
+          
+          if PHASETWO = 1 then -- Just Works
+            ini[i].state := I_PHASETWO_DONE;
           end;
+
+          if PHASETWO = 2 then -- Numeric Comparison
+            -- Set the verification calculation
+            undefine newVValue;
+            newVValue.pk_initiator := i;
+            newVValue.pk_responder := ini[i].responder;
+            newVValue.n_initiator  := i;
+            newVValue.n_responder  := ini[i].responder_n;
+
+            ini[i].vValue := newVValue;
+            ini[i].state := I_NC_VERIF_SET;
+          end;
+        else
+          --error "commitment value does not match -- aborted pairing"
         end;
       end;
     end;
@@ -478,19 +495,17 @@ ruleset i: InitiatorId do
       inM := net[k];
       multisetremove (k, net);  -- remove from the network
 
-      if inM.source = ini[i].responder then -- make sure from responder
-        if inM.mType = M_ExchangeVerif then
-          if inM.eValue.pk_send = ini[i].responder_pk &
-             inM.eValue.pk_recv = i &
-             inM.eValue.n_send  = ini[i].responder_n &
-             inM.eValue.n_recv  = i &
-             inM.eValue.r_recv  = i then -- Eb should have r = ra
-            -- Verified so can complete phase 3
-            ini[i].state      := I_PAIRED;
-            ini[i].linkKey    := true;
-          else
-            --error "(step 11a) exchange verification did not match"
-          end;
+      if inM.mType = M_ExchangeVerif then
+        if inM.eValue.pk_send = ini[i].responder_pk &
+           inM.eValue.pk_recv = i &
+           inM.eValue.n_send  = ini[i].responder_n &
+           inM.eValue.n_recv  = i &
+           inM.eValue.r_recv  = i then -- Eb should have r = ra
+          -- Verified so can complete phase 3
+          ini[i].state      := I_PAIRED;
+          ini[i].linkKey    := true;
+        else
+          --error "(step 11a) exchange verification did not match"
         end;
       end;
     end;
@@ -801,7 +816,7 @@ end;
 -- intruder i intercepts messages
 ruleset i: IntruderId do
   choose k: net do
-    rule 100 "intruder intercepts messages"
+    rule 10 "intruder intercepts messages"
 
       !ismember (net[k].source, IntruderId)
 
