@@ -52,7 +52,7 @@
 --    B -> A: Nb
 --    A: If f1(Pkb, PKa, Nb, 0) != Cb then ABORT
 --
---  + Passkey Entry
+--  + Passkey Entry - Not modeled as actually just NC done multiple times
 --    =============
 --    A: Inject random passkey rai (set rbi = rai)
 --    B: Inject same passkey rbi (set rai = rbi)
@@ -63,7 +63,7 @@
 --    A: If f1(PKa, PKb, Nbi, rbi) != Cbi then ABORT
 --    B: If f1(PKa, PKb, Nai, rai) != Cai then ABORT
 --
---  + Out of Band
+--  + Out of Band - Not modeled as OOB assumed secure
 --    ===========
 --    A: ra = rand, rb = 0
 --    B: rb = rand, ra = 0
@@ -97,6 +97,7 @@
 --------------------------------------------------------------------------------
 --
 --  Phase 4: Link Key Calculations
+--  Not modeled to reduce space exploration and by this time no messages passed.
 --
 --    A: Initiating Device
 --    B: Non-Initiating Device
@@ -109,6 +110,7 @@
 --------------------------------------------------------------------------------
 --
 --  Phase 5: LMP Authentication and Encryption
+--  Not modeled to reduce space exploration and by this time no messages passed.
 --
 --  At this point regular cryptographic protocols are used now that the link
 --  key has been established and we assume these protocols are secure.
@@ -121,7 +123,7 @@
 
 -- -----------------------------------------------------------------------------
 const
-  PHASETWO:       2;  -- SSP Phase 2 Protocol (1: JW | 2: NC | 3: PE | 4: OOB)
+  PHASETWO:       2;  -- SSP Phase 2 Protocol (1: JW | 2: NC)
   ASSUMEVALIDRESPONDER:   true;  -- Could be impersonating device
 
   NumInitiators:  1;  -- number of initiators
@@ -507,6 +509,16 @@ ruleset i: InitiatorId do
           -- Verified so can complete phase 3
           ini[i].state      := I_PAIRED;
           ini[i].linkKey    := true;
+
+          -- Update the intruder state as this only is done if we pair
+          if ismember(ini[i].responder, IntruderId) then
+            alias a: ini[i].responder do
+              if (int[a].pk[i] & int[a].sent_pk[i] &
+                  int[a].nonce[i] & int[a].sent_n[i]) then
+                  int[a].linkKeys[i] := true;
+              end;
+            end;
+          end;
         else
           --error "(step 11a) exchange verification did not match"
         end;
@@ -727,6 +739,16 @@ ruleset j: ResponderId do
               -- Update state to be done with phase 3
               res[j].pairings[i].state      := R_PAIRED;
               res[j].pairings[i].linkKey    := true;
+
+              -- Update the intruder state as this only is done if we pair
+              if ismember(res[j].pairings[i].initiator, IntruderId) then
+                alias a: res[j].pairings[i].initiator do
+                  if (int[a].pk[j] & int[a].sent_pk[j] &
+                      int[a].nonce[j] & int[a].sent_n[j]) then
+                      int[a].linkKeys[j] := true;
+                  end;
+                end;
+              end;
             else
               --error "(step 10b) exchange verification did not match"
             end;
