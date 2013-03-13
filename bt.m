@@ -121,7 +121,7 @@
 
 -- -----------------------------------------------------------------------------
 const
-  PHASETWO:       1;  -- SSP Phase 2 Protocol (1: JW | 2: NC | 3: PE | 4: OOB)
+  PHASETWO:       2;  -- SSP Phase 2 Protocol (1: JW | 2: NC | 3: PE | 4: OOB)
   ASSUMEVALIDRESPONDER:   true;  -- Could be impersonating device
 
   NumInitiators:  1;  -- number of initiators
@@ -247,7 +247,10 @@ type
   Intruder: record 
     messages: multiset[MaxKnowledge] of Message;
     linkKeys: array[AgentId] of boolean;
-    vValues:  array[AgentId] of VValue;
+    pk:       array[AgentId] of boolean;  -- Do we know their PK
+    sent_pk:  array[AgentId] of boolean;  -- Did we send our PK to them
+    nonce:    array[AgentId] of boolean;  -- Do we know their nonce
+    sent_n:   array[AgentId] of boolean;  -- Did we send our nonce
   end;
   
 -- -----------------------------------------------------------------------------
@@ -781,10 +784,12 @@ ruleset a: IntruderId do
 
     ==>
     begin
-      -- TODO Actually make some boolean conditions on what is known etc.
-      -- because initiating with intruder already then verification
-      -- will occur naturally
-      ini[i].state := I_PHASETWO_DONE;
+      if (int[a].pk[i] & int[a].sent_pk[i] &
+          int[a].nonce[i] & int[a].sent_n[i]) then 
+        -- If we've initiated with them then we have DH key and verification
+        -- passes through
+        ini[i].state := I_PHASETWO_DONE;
+      end;
     end;
   end;
 end;
@@ -801,10 +806,12 @@ ruleset a: IntruderId do
 
       ==>
       begin
-        -- TODO Actually make some boolean conditions on what is known etc.
-        -- because initiating with intruder already then verification
-        -- will occur naturally
-        res[r].pairings[k].state := R_PHASETWO_DONE;
+        if (int[a].pk[r] & int[a].sent_pk[r] &
+            int[a].nonce[r] & int[a].sent_n[r]) then 
+          -- If we've initiated with them then we have DH key and verification
+          -- passes through
+          res[r].pairings[k].state := R_PHASETWO_DONE;
+        end;
       end;
     end;
   end;
@@ -850,7 +857,14 @@ ruleset i: IntruderId do
                  messages[l].eValue.r_recv   = temp.eValue.r_recv)) = 0 then
             -- If not exist then add to messages
             multisetadd (temp, int[i].messages);
-
+            -- Learn some of the informations
+            if (temp.mType = M_PublicKey) then
+              int[i].pk[temp.source] := true;
+            end;
+            
+            if (temp.mType = M_Nonce) then
+              int[i].nonce[temp.source] := true;
+            end;
           end;
         end;
       end;
@@ -913,6 +927,8 @@ ruleset i: IntruderId do
           outM.source := i;
           outM.dest   := k;
           outM.publickey := i;
+          -- Set information about what we send
+          int[i].sent_pk[k] := true;
         case M_CommitValue:
           undefine outCValue;
           outCValue.pk_send := i;
@@ -928,6 +944,8 @@ ruleset i: IntruderId do
           outM.source := i;
           outM.dest   := k;
           outM.nonce  := i;
+          -- Set information about what we send
+          int[i].sent_n[k] := true;
         case M_ExchangeVerif:
           undefine outEValue;
           outEValue.pk_send := i;
@@ -973,8 +991,12 @@ startstate
   for i: IntruderId do
     for j: AgentId do
       int[i].linkKeys[j]  := false;
+      int[i].sent_pk[j]   := false;
+      int[i].sent_n[j]    := false;
     end;
     int[i].linkKeys[i] := true;
+    int[i].pk[i]       := true;
+    int[i].nonce[i]    := true;
   end;
      
   -- initialize network
