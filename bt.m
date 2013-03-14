@@ -126,7 +126,7 @@ const
   PHASETWO:       2;  -- SSP Phase 2 Protocol (1: JW | 2: NC)
   ASSUMEVALIDRESPONDER:   true;  -- Could be impersonating device
 
-  NumInitiators:  1;  -- number of initiators
+  NumInitiators:  3;  -- number of initiators
   MaxInitiators:  1;  -- maximum number of initiators per responder
   NumResponders:  1;  -- number of responders
   NumIntruders:   1;  -- number of intruders

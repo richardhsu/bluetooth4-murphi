@@ -3,7 +3,7 @@
 #
 # David (Wei) Jia and Richard Hsu
 
-MURPHI = /bin/mu
+MURPHI = mu
 
 CXX = g++ -DCATCH_DIV -fno-default-inline -Wno-deprecated                           
 INCLUDE = ./include/                                                               
