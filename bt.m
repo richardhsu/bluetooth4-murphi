@@ -1043,7 +1043,7 @@ invariant "responders correctly paired with good initiator"
                                IntruderId))) = 0
   end;
 
--- initiator secrecy
+-- initiator confidentiality
 invariant "initiator link key is secret"
   forall i: InitiatorId do
     ini[i].state = I_PAIRED &
@@ -1054,7 +1054,7 @@ invariant "initiator link key is secret"
     end
   end;
 
--- responder secrecy
+-- responder confidentiality
 invariant "responder link key is secret"
   forall j: IntruderId do
     forall i: ResponderId do
@@ -1067,10 +1067,10 @@ invariant "responder link key is secret"
   end;
 
 
--- initiator honest pairing
+-- initiator intention preservation
 -- every initiator device is paired with who the device originally thought it 
 -- would be paired with
-invariant "initiator honest pairing"
+invariant "initiator intention preservation pairing"
   forall i: InitiatorId do
     ini[i].state = I_PAIRED &
     ini[i].linkKey = true
@@ -1081,10 +1081,10 @@ invariant "initiator honest pairing"
   end;
 
 
--- responder honest pairing
+-- responder intention preservation
 -- every responder device is paired with who the device originally thought it 
 -- would be paired with
-invariant "responder honest pairing"
+invariant "responder intention preservation pairing"
   forall i: ResponderId do
     multisetcount(j:res[i].pairings,
                   res[i].pairings[j].state = R_PAIRED) >= 1
@@ -1096,11 +1096,3 @@ invariant "responder honest pairing"
        res[i].pairings[j].initiator = gpr[l].initiator) >= 1)
     ) >= 1
   end;
-
-
-
-
-
-
-
-
