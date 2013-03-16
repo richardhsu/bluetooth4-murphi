@@ -1,0 +1,109 @@
+% ==============================================================================
+% CS 259 - Winter 2013
+% Formal Modeling and Analysis of the Bluetooth 4.0 Pairing Protocol
+% David (Wei) Jia and Richard Hsu
+% Stanford University
+% ==============================================================================
+% Requirements:
+% + This file requires the acm_proc_article-sp.cls style file.
+% + This file requires a cs259-bluetooth.bib file for the references.
+% ==============================================================================
+
+\documentclass{acm_proc_article-sp}
+\usepackage{url} 
+
+\begin{document}
+
+% Document Meta Data ===========================================================
+\title{Formal Modeling and Analysis of the \\ Bluetooth 4.0 Pairing Protocol}
+\numberofauthors{2} 
+\author{
+	\alignauthor David (Wei) Jia \\
+		\affaddr{Stanford University} \\
+	    \email{djia@stanford.edu}
+	\alignauthor Richard Hsu \\
+	    \affaddr{Stanford University} \\
+	    \email{rhsu@cs.stanford.edu}
+}
+
+% Title Display of Information =================================================
+\maketitle
+
+% Abstract =====================================================================
+\begin{abstract}
+Bluetooth is a wireless technology for exchanging data over short distances and
+is built into many of the devices used in daily life such as smartphones and 
+laptops. For devices to actually communicate through Bluetooth the devices must
+establish a pairing. The pairing is done through Bluetooth's pairing protocol
+known as Secure Simple Pairing (SSP) which has been established since 
+Bluetooth 2.1+. We employ a model checker to verify the design properties of 
+the pairing protocol used in the latest iteration version 4.0 of Bluetooth. We
+demonstrate already known attacks on Bluetooth 4.0 SSP and discuss a new attack
+found by our model and discuss the implications and begin a discussion on the
+possible fixes that could be employed. Through this formal modeling we expand
+on the verification process of securing the Bluetooth pairing protocol.
+\end{abstract}
+
+% Introduction =================================================================
+\section{Introduction}
+Bluetooth is a wireless technology that is ubiquitous in our computing world.
+Many users rely on it to transfer data between smartphone devices, laptops,
+on-board car systems, and headsets. Bluetooth technology also exists in more
+peripheral items such as printers, mice, keyboard, and speakers. Due to the
+proliferation of the concern of data security, any communication channel should
+be thoroughly tested for security. Therefore focusing on Bluetooth, we want
+to be sure that the Bluetooth pairing protocol and communication channels are
+secure as any compromise to the system can cause confidential information to be
+exposed. 
+
+We focus our attentions on the Bluetooth 4.0 Protocol \cite{bluetooth:sig} 
+which is the most recent version implementation of the technology at the time
+of writing. %% TODO: Add some more information.
+
+\section{Related Works}
+Because of Bluetooth’s prevalence and the emergence of mobile technology, several related works have been done in an effort to analyze the security of Bluetooth. Most recently, in 2010, Phan and Mingard [3] analyzed the Bluetooth 4.0 protocol in “Analyzing the Secure Simple Pairing in Bluetooth v4.0” which hand modeled and analyzed Bluetooth 4.0 and described three Man in the Middle (MitM) attacks for the NC and PE modes. In their 2007 paper, “Formal Analysis of Authentication in Bluetooth Device Pairing”, Chang and Shmatikov [4] modeled Bluetooth 2.0 using ProVerif cryptographic protocol verifier and verified a known guessing attack and discovered a potential vulnerability which produces concurrent execution of authentication. Similarly, Haataja and Toivanen [8] discussed in “Practical man-in-the-middle attacks against bluetooth secure simple pairing” two more MitM attacks on Bluetooth 2.0 handsets and hand-free devices as well as modeled a vulnerability on the OoB mode given that the attacker has visual contact to the victim devices. Other papers are more general and informative, presenting a high-level view of the Bluetooth protocol, or suggesting potential vulnerabilities and risks associated with Bluetooth without providing formal analysis or proof.
+
+While these papers present a good starting point for modeling Bluetooth 4.0, they are insufficient. First, many of the analysis of Bluetooth are either not formal or performed on outdated versions, such as v2.x. The most up-to-date analysis of Bluetooth 4.0 by Phan and Mingard encapsulated a formal analysis of only the NC and PE modes without formal modeling with a cryptographical tool such as Murphi. Furthermore, the paper focused on MitM attacks between only two pairing devices, and did not discuss eavesdropping, denial of service attacks, or multiple devices.
+
+
+\section{Bluetooth Overview}
+
+\subsection{Secure Simple Pairing Protocol}
+
+\section{Murphi Model Checker}
+
+\section{Modeling Secure Simple Pairing}
+
+\subsection{Design Choices}
+
+\subsection{Modeling Protocol Entities}
+
+\subsubsection{Initiators}
+
+\subsubsection{Responder}
+
+\subsection{Modeling Protocol Transitions}
+
+\subsection{Modeling An Adversary}
+
+\subsubsection{Adversarial Actions}
+
+\subsection{Security Properties and Invariants}
+
+\subsection{Starting State of Protocol}
+
+\section{Analysis, Results, and Discussion}
+
+\section{Conclusions}
+
+% Bibliography =================================================================
+% The following two commands are all you need in the initial runs of your .tex 
+% file to produce the bibliography for the citations in your paper.
+\bibliographystyle{abbrv}
+\bibliography{cs259-bluetooth}  % cs259-bluetooth.bib is the name of the bib
+% You must have a proper ".bib" file and remember to run:
+% latex bibtex latex latex
+% This will resolve all the references.
+
+\balancecolumns
+\end{document}
