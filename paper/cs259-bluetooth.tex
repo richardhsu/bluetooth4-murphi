@@ -110,7 +110,7 @@ We then explore MitM attacks on JW and OoB modes. We will also investigate other
 We use the Murphi Model Checker \cite{bau:mitchell} in order to model the states of the Bluetooth 4.0 pairing protocol. The Murphi Model Checker allows us to model the different states possible in the protocol and be able to model the packets being sent between device parties while modeling an adversary that has certain access rights to these packets depending on the protocol mode and encryption methods of the packets. We begin by modeling two devices being paired and then from there model multiple devices connecting to a single parent device. Bluetooth only allows at most seven devices paired to a single responder device, therefore scaling can be done in a natural way and we can model larger ecosystems of Bluetooth devices given the right computational resources.
 
 \section{Bluetooth Modeling}
-In order to formally model the Bluetooth 4.0 Pairing Protocols we utilize the Murphi modeling tool. In Murphi, the variables represent the values being passed throughout the communication of the pairing as well as the hash values being created by the devices. The states are modeled by the state variables representing the actual states during the pairing protocol as described by the Bluetooth 4.0 core specification files. We model transitions between steps of each phase as transitions in our state variables. We model the intruder as being a general active attacker adhering to the Dolev-Yao model \cite{dolev:yao}. In conjunction with the possible state executions, the Murphi model checker will explore all possible states and verify our security invariants for plausible executions. Our overall model consists of roughly 1000 lines of Murphi code. Please note that for the sake of conciseness, we refrain from showing all of our code in this paper and instead include the entire codebase in separate repository. In this paper, for purposes of understanding our formalization, we will present a high level overview of our model.
+In order to formally model the Bluetooth 4.0 Pairing Protocols we utilize the Murphi modeling tool. In Murphi, the variables represent the values being passed throughout the communication of the pairing as well as the hash values being created by the devices. The states are modeled by the state variables representing the actual states during the pairing protocol as described by the Bluetooth 4.0 core specification files. We model transitions between steps of each phase as transitions in our state variables. We model the intruder as being a general active attacker adhering to the Dolev-Yao model \cite{dolev:yao}. In conjunction with the possible state executions, the Murphi model checker will explore all possible states and verify our security invariants for plausible executions. Our overall model consists of roughly 1000 lines of Murphi code. Please note that for the sake of conciseness, we refrain from showing all of our code in this paper and instead include the entire codebase in separate repository. In this paper, for purposes of understanding our formalization, we will present a high level overview of our models.
 
 \subsection{Design Choices}
 We model our pairing protocol by defining separate models for the different device roles in SSP. The major models are the initiator--the device that begins the pairing protocol, and the responder--the device that with which the initiator is being paired. The message model is utilized to describe the transitions throughout the various phases of the pairing protocol. In general only phases prior to and up until phase IV are modeled using Murphi rulesets because phase V simply involves encryption and the start of message transmission after the Link Key is calculated in phase IV. After phase III, the link key generation can be done without a transition, given all prior information from phases I to III. Phase IV is represented in our model by denoting two paired devices as ``having'' a link key by the linkKey boolean variable of initiators and responders (as we will discuss below). Thus, there is no loss of generality of our model because phase IV is the last phase in which any network communication occurs and the final execution stage that verifies the pairing is complete.
@@ -121,52 +121,35 @@ We model our pairing protocol by defining separate models for the different devi
 In the initiator model, there are seven distinct states defined by the enumeration InitiatorStates. Three states, \texttt{I\_SLEEP}, \texttt{I\_SENT\_KEY}, and \texttt{I\_PHASEONE\_DONE} describe the initiator's interactions in phase I of the Bluetooth SSP protocol. The states \texttt{I\_WAIT\_ONCE}, \texttt{I\_NC\_VERIF\_SET}, and \texttt{I\_PHASETWO\_DONE} model the initiator's interactions in phase II. \texttt{I\_WAIT\_EVALUE} and \texttt{I\_PAIRED} model the initiator's interactions in phase III and IV.
 
 Each initiator record holds the current state the initiator is in, the responder with which the initiator is trying pair, and a set of saved variables passed from the responder to the initiator. Finally, the linkKey boolean variable denotes whether or not the link key was generated.
-
 \begin{verbatim}
 Initiator: record
-    state: InitiatorStates;
-    responder: AgentId;
-    -- recieved public key in phase 1
-    responder_pk: AgentId;
-    -- recieved rb value if any
-    responder_r: AgentId;
-    -- recieved nonce in phase 2
-    responder_n: AgentId;
-    -- received commitment value
-    responder_c: CValue;
-    -- link key of the pairing generated
-    linkKey:      boolean;
-    -- verification token generated NC Phase 3
-    vValue:       VValue;
-end;
+  state: InitiatorStates;
+    responder: AgentId;    -- Other Agent
+    responder_pk: AgentId; -- Public key in phase 1
+    responder_r: AgentId;  -- Rb value
+    responder_n: AgentId;  -- Nonce in phase 2
+    responder_c: CValue;   -- Commitment value
+    linkKey: boolean;      -- Link key
+    vValue: VValue;        -- Verifification token
 \end{verbatim}
 
 \subsubsection{Responder}
 In the responder model there are six distinct states defined by the enumeration ResponderStates. The first two states \texttt{R\_SLEEP} and \texttt{R\_PHASEONE\_DONE} describe the responder's interaction in Phase I of the protocol. \texttt{R\_WAIT\_NONCE}, \texttt{R\_NC\_VERIF\_SET}, and \texttt{R\_PHASETWO\_DONE} model the responder's interactions in phase II. Finally \texttt{R\_PAIRED} models the responder's interactions in phase III and IV.
 
 Each responder record holds the current state of each pairing, which saves information between a pairing agent and itself, and contains the information received over the network such as the nonce and public key. Finally, the linkKey states whether or not the link key was generated.
-
 \begin{verbatim}
 Pairing: record
-  state:          ResponderStates;
-  initiator:      AgentId;
-  -- recieved public key in phase 1
-  initiator_pk:  AgentId;
-  -- received random value
-  initiator_r:   AgentId;
-  -- recieved nonce in phase 2
-  initiator_n:   AgentId;
-  -- received commitment value
-  initiator_c:   CValue;
-  -- link key of the pairing
-  linkKey:        boolean;
-  -- vvalue of the pairing
-  vValue:         VValue;
-end;
+  state: ResponderStates;
+  initiator: AgentId;
+  initiator_pk: AgentId; -- Public key in phase 1
+  initiator_r: AgentId;  -- Random value
+  initiator_n: AgentId;  -- Nonce in phase 2
+  initiator_c: CValue;   -- Commitment value
+  linkKey: boolean;      -- Link key
+  vValue: VValue;        -- Verification token
   
 Responder: record
   pairings: multiset[MaxInitiators] of Pairing;
-end;
 \end{verbatim}
 
 \subsection{Modeling Messages}
@@ -183,22 +166,14 @@ Given these states, the Message record is defined as follows:
 
 \begin{verbatim}
 Message : record
-  -- message type
-  mType:      MessageType;
-  -- source of message
-  source:     AgentId;
-  -- intended destination of message
-  dest:       AgentId;
+  mType: MessageType;
+  source: AgentId; -- Sender
+  dest: AgentId;   -- Receiver
   
-  -- nonce from source to dest
-  nonce:      AgentId;
-  -- public key
-  publickey:  AgentId;
-  -- commit value (Phase 2)
-  cValue:     CValue;
-  -- exchange verification value (Phase 3)
-  eValue:     EValue;
-end;
+  nonce: AgentId;     -- Nonce
+  publickey: AgentId; -- Public Key
+  cValue: CValue;     -- Commit value
+  eValue: EValue;     -- Exchange verification
 \end{verbatim}
 
 Each message contains the values exchanged throughout the protocol as described in our overview of Bluetooth. Since the Murphi model checker do not support hash functions, we simulate it by assuming that the cryptographic hash functions are collision resistant, therefore in order to generate the same hash value, the inputs must be equal. Thus we can safely model hash values as a record of their inputs, and when checking that the hash values are equal, our model simply verifies that all input values are equal as well. Below we present the commitment value, the exchange verification value, and the verification code value which are records of all their inputs in our model.
@@ -206,40 +181,24 @@ Each message contains the values exchanged throughout the protocol as described 
 \begin{verbatim}
 -- Commitment Value
 CValue : record
-  -- when created - pk of sender
-  pk_send:  AgentId;
-  -- when created - pk of receiver
-  pk_recv:  AgentId;
-  -- when created - nonce of sender
-  n_send:   AgentId;
-end;
+  pk_send:  AgentId; -- Sender Pk
+  pk_recv:  AgentId; -- Receiver Pk
+  n_send:   AgentId; -- Sender Nonce
 
 -- Exchange Verification Value
 EValue : record
-  -- when created - pk of sender
-  pk_send:    AgentId;
-  -- when created - pk of receiver
-  pk_recv:    AgentId;
-  -- when created - nonce of sender
-  n_send:     AgentId;
-  -- when created - nonce of receiver
-  n_recv:     AgentId;
-  -- when created
-  -- random value generated by the receiver
-  r_recv:     AgentId;
-end;
+  pk_send:    AgentId; -- Sender Pk
+  pk_recv:    AgentId; -- Receiver Pk
+  n_send:     AgentId; -- Sender Nonce
+  n_recv:     AgentId; -- Receiver Nonce
+  r_recv:     AgentId; -- Random Value
 
 -- Verification Value
 VValue : record
-  -- public key of initiator
-  pk_initiator:   AgentId;
-  -- public key of responder
-  pk_responder:   AgentId;
-  -- nonce sent by initiator
-  n_initiator:    AgentId;
-  -- nonce sent by responder
-  n_responder:    AgentId;
-end;
+  pk_initiator:   AgentId; -- Initiator Pk
+  pk_responder:   AgentId; -- Responder Pk
+  n_initiator:    AgentId; -- Initiator Nonce
+  n_responder:    AgentId; -- Responder Nonce
 \end{verbatim}
 
 \subsection{Modeling Protocol Transitions}
@@ -268,9 +227,7 @@ Intruder: record
   nonce:    array[AgentId] of boolean;
   -- Did we send our nonce
   sent_n:   array[AgentId] of boolean;
-end;
 \end{verbatim}
-
 
 \subsubsection{Intercept Messages}
 The adversarial model against our pairing protocol is mainly a Man-in-the-Middle (MitM) attack in which the adversary has control of the communication channel between the two users. In this case the intruder has three main courses of action: (i) intercept messages, (ii) pick a stored message and forward it along without modification, (iii) or modify the messages before forwarding it.
@@ -280,13 +237,10 @@ The adversarial model against our pairing protocol is mainly a Man-in-the-Middle
 ruleset i: IntruderId do
   choose k: net do
     rule 100 ``intruder intercepts messages''
-      
       -- Pick a msg from network that is not
       -- intended for the intruder
       !ismember (net[k].source, IntruderId)
-
     ==>
-
     begin
       -- the message to intercept
       alias msg: net[k] do
@@ -296,12 +250,7 @@ ruleset i: IntruderId do
              int[i].messages[l] = msg
            ) = 0 then
            multisetadd (msg, int[i].messages);
-        end;
-      end;
       multisetremove (k, net);
-    end;
-  end;
-end;
 \end{verbatim}
 
 \subsubsection{Forward without Modifications}
@@ -332,10 +281,6 @@ ruleset i: IntruderId do
         outM.source := i;
         outM.dest   := k;
         multisetadd (outM, net);
-      end;
-    end;
-  end;
-end;
 \end{verbatim}
 
 \subsubsection{Modify and Forward}
@@ -364,10 +309,6 @@ ruleset i: IntruderId do
         -- M_Nonce, or M_ExchangeVerif
         -- Send recorded message with modifications
         multisetadd (outM, net);
-      end;
-    end;
-  end;
-end;
 \end{verbatim}
 
 \subsection{Security Properties and Invariants}
@@ -382,20 +323,17 @@ invariant ``initiator correctly paired with
             good responder''
   forall i: InitiatorId do
     ini[i].state = I_PAIRED 
-    ->
-    !ismember(ini[i].responder, IntruderId)
-  end;
+    -> !ismember(ini[i].responder, IntruderId)
 
 -- responder authenticity
 invariant ``responders correctly paired with 
             good initiator''
   forall i: ResponderId do
     multisetcount(l:res[i].pairings, 
-        (res[i].pairings[l].state = R_PAIRED &
+      (res[i].pairings[l].state = R_PAIRED &
          ismember(res[i].pairings[l].initiator,
                   IntruderId))
     ) = 0
-  end;
 \end{verbatim}
 
 \subsubsection{Confidentiality}
@@ -410,8 +348,6 @@ invariant ``initiator link key is secret''
     ->
     forall j: IntruderId do
       int[j].linkKeys[i] = false
-    end
-  end;
 
 -- responder confidentiality
 invariant ``responder link key is secret''
@@ -423,8 +359,6 @@ invariant ``responder link key is secret''
          res[i].pairings[l].linkKey = true & 
          int[j].linkKeys[i] = true)
       ) = 0
-    end
-  end;
 \end{verbatim}
 
 \subsubsection{Intention Preservation}
@@ -445,8 +379,6 @@ invariant ``initiator intention
          (gpr[l].initiator = i &
          pr[l].responder = ini[i].responder))
      >= 1
-  end;
-
 
 -- responder intention preservation
 -- every responder device is paired with who 
@@ -456,18 +388,15 @@ invariant ``responder intention
             preservation pairing''
   forall i: ResponderId do
         multisetcount(j:res[i].pairings,
-    res[i].pairings[j].state = R_PAIRED) >=
-     1
+    res[i].pairings[j].state = R_PAIRED) >= 1
     ->
     multisetcount(l:gpr,
       (multisetcount(j:res[i].pairings,
        res[i].pairings[j].state = R_PAIRED &
        gpr[l].responder = i &
-       res[i].pairings[j].initiator 
-         = gpr[l].initiator
+       res[i].pairings[j].initiator = gpr[l].initiator
       ) >= 1)
     ) >= 1
-  end;
 \end{verbatim}
 
 \subsection{Protocol Initial State}
